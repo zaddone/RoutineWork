@@ -1,0 +1,44 @@
+syntax = "proto3";
+package console;
+service Greeter {
+	//rpc GetAccountId(Request) returns (stream AccountId){}
+	rpc ListInstrument(Request) returns (stream Instrument) {}
+	rpc StartInstrument(InstrumentSimple) returns (InstrumentReply) {}
+	rpc GetLastTime(InstrumentSimple) returns (stream LastTime) {}
+}
+message LastTime{
+	string Tag = 1;
+	int64 time = 2;
+	int64 Scale = 3;
+}
+message InstrumentSimple{
+	string Name = 1;
+}
+message InstrumentReply {
+	bool State = 1;
+}
+message Request {
+//	string greeting = 1;
+}
+//message AccountId {
+// 	string Id = 1;
+//	uint32 Num = 2;
+//}
+message Instrument {
+	string Name = 1;
+
+	double DisplayPrecision =2;
+	double MarginRate =3;
+
+	double MaximumOrderUnits =4;
+	double MaximumPositionSize =5;
+	double MaximumTrailingStopDistance =6;
+
+	double MinimumTradeSize =7;
+	double MinimumTrailingStopDistance =8;
+
+	double PipLocation = 9;
+	double TradeUnitsPrecision =10;
+	string Type = 11;
+	bool Online = 12;
+}

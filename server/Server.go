@@ -1,0 +1,107 @@
+package server
+
+import (
+	pb "../console"
+	"../replay"
+	"../request"
+	"context"
+	"flag"
+	"time"
+	//"fmt"
+	//"golang.org/x/net/context"
+	//"context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+	"log"
+	"net"
+)
+
+var (
+	port = flag.String("port", ":50051", "Input Port")
+)
+
+type server struct{}
+
+func (s *server) StartInstrument(ctx context.Context, InsName *pb.InstrumentSimple) (*pb.InstrumentReply, error) {
+
+	return &pb.InstrumentReply{State: replay.Start(InsName.Name)}, nil
+
+}
+func (s *server) GetLastTime(InsName *pb.InstrumentSimple, stream pb.Greeter_GetLastTimeServer) error {
+	for _, inc := range replay.InsCaches {
+		if inc.Name == InsName.Name {
+			log.Println(InsName, "lastTime")
+
+			ser := new(replay.ServerChan)
+			ctx, cancel := context.WithCancel(context.Background())
+			ser.Init(ctx)
+			key := int(time.Now().UnixNano())
+			inc.ServerChan[key] = ser
+			defer func() {
+				log.Println("lastTime over")
+				delete(inc.ServerChan, key)
+				cancel()
+				ser.Clear()
+
+			}()
+			return ser.Out(func(ti *replay.TimeCache) error {
+
+				return stream.Send(&pb.LastTime{
+					Tag:   ti.Name,
+					Scale: ti.Scale,
+					Time:  ti.Time})
+
+			})
+
+		}
+	}
+	return nil
+
+}
+
+func (s *server) ListInstrument(re *pb.Request, stream pb.Greeter_ListInstrumentServer) error {
+
+	instr := request.ActiveAccount.Instruments
+	for _, inc := range replay.InsCaches {
+		instr[inc.Name].Online = true
+	}
+
+	for _, ins := range instr {
+		if err := stream.Send(
+			&pb.Instrument{
+				Name:                        ins.Name,
+				DisplayPrecision:            ins.DisplayPrecision,
+				MarginRate:                  ins.MarginRate,
+				MaximumOrderUnits:           ins.MaximumOrderUnits,
+				MaximumPositionSize:         ins.MaximumPositionSize,
+				MaximumTrailingStopDistance: ins.MaximumTrailingStopDistance,
+				MinimumTradeSize:            ins.MinimumTradeSize,
+				MinimumTrailingStopDistance: ins.MinimumTrailingStopDistance,
+				PipLocation:                 ins.PipLocation,
+				TradeUnitsPrecision:         ins.TradeUnitsPrecision,
+				Online:                      ins.Online,
+				Type:                        ins.Type}); err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func init() {
+	flag.Parse()
+	lis, err := net.Listen("tcp", *port)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	pb.RegisterGreeterServer(s, &server{})
+	reflection.Register(s)
+	go func() {
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to server: %v", err)
+		}
+	}()
+	//fmt.Println("server run")
+}
