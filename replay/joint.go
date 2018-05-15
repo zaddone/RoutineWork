@@ -1,7 +1,7 @@
 package replay
 
 import (
-	"../request"
+	"github.com/zaddone/RoutineWork/request"
 	"math"
 )
 

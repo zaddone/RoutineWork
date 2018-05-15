@@ -1,9 +1,9 @@
 package server
 
 import (
-	pb "../console"
-	"../replay"
-	"../request"
+	pb "github.com/zaddone/RoutineWork/console"
+	"github.com/zaddone/RoutineWork/replay"
+	"github.com/zaddone/RoutineWork/request"
 	"context"
 	"flag"
 	"time"

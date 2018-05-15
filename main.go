@@ -1,9 +1,9 @@
 package main
 
 import (
-	_ "./replay"
-	_ "./request"
-	_ "./server"
+	_ "github.com/zaddone/RoutineWork/replay"
+	_ "github.com/zaddone/RoutineWork/request"
+	_ "github.com/zaddone/RoutineWork/server"
 	"fmt"
 )
 
