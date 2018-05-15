@@ -46,6 +46,9 @@ func (self *ServerChan) In(f TimeCache) {
 
 		default:
 			//log.Println(_f)
+			if self.TimeChan == nil {
+				return
+			}
 			self.TimeChan <- f
 		}
 	}(f, ctx)
