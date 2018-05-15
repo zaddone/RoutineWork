@@ -3,16 +3,13 @@ package replay
 import (
 	//"../request"
 	"context"
-	"flag"
+	//"flag"
 	"log"
 	"path/filepath"
-	"strings"
+	"sync"
+	//"strings"
 )
 
-var (
-	InsCaches []*InstrumentCache
-	InsName   = flag.String("n", "EUR_JPY", "INS NAME")
-)
 
 type TimeCache struct {
 	Time  int64
@@ -53,6 +50,7 @@ func (self *ServerChan) In(f TimeCache) {
 		}
 	}(f, ctx)
 }
+
 func (self *ServerChan) Init(ctx context.Context) {
 	self.ctx = ctx
 	self.TimeChan = make(chan TimeCache, 5)
@@ -64,45 +62,44 @@ func (self *ServerChan) Clear() {
 		self.TimeChan = nil
 	}
 }
+type ServerChanMap struct{
+	ServerChans     map[int]*ServerChan
+	sync.RWMutex
+}
+func (self *ServerChanMap) Init(){
+	self.ServerChans = make(map[int]*ServerChan)
+}
+func (self *ServerChanMap) Del(k int){
+	self.Lock()
+	delete(self.ServerChans,k)
+	self.Unlock()
+}
+func (self *ServerChanMap) Send(tc TimeCache){
+	self.Lock()
+	for _,ser := range self.ServerChans {
+		ser.In(tc)
+	}
+	self.Unlock()
+}
+func (self *ServerChanMap) Add(k int,Sc *ServerChan){
+
+	self.Lock()
+	self.ServerChans[k] = Sc
+	self.Unlock()
+
+}
 
 type InstrumentCache struct {
 	GranularityMap map[string]int64
 	CacheList      []*Cache
 	Name           string
-	ServerChan     map[int]*ServerChan
+	ServerChanMap     ServerChanMap
 }
 
-func init() {
-	flag.Parse()
-	nas := strings.Split(*InsName, "|")
-	InsCaches = make([]*InstrumentCache, len(nas))
-	var InsC *InstrumentCache
-	for i, na := range nas {
-		InsC = new(InstrumentCache)
-		InsCaches[i] = InsC
-		InsC.Init(na)
-		InsC.Run()
-	}
-
-}
-
-func Start(Ins string) bool {
-	for _, insc := range InsCaches {
-		if insc.Name == Ins {
-			return false
-		}
-	}
-	InsC := new(InstrumentCache)
-	InsC.Init(Ins)
-	InsCaches = append(InsCaches, InsC)
-	InsC.Run()
-	log.Println("start", Ins)
-	return true
-
-}
 
 func (self *InstrumentCache) Init(Instr string) {
-	self.ServerChan = make(map[int]*ServerChan)
+	self.ServerChanMap.Init()
+	//self.ServerChan = make(map[int]*ServerChan)
 	self.Name = Instr
 	self.GranularityMap = make(map[string]int64)
 	self.GranularityMap["S5"] = 5

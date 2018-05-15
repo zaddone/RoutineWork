@@ -131,15 +131,11 @@ func (self *Cache) CheckUpdate(can *request.Candles) bool {
 		}
 	}
 	self.LastCan = can
-	//fmt.Println(can)
-	if len(self.par.ServerChan) > 0 {
-		for _, ser := range self.par.ServerChan {
-			ser.In(TimeCache{
+	self.par.ServerChanMap.Send(TimeCache{
 				Scale: self.Scale,
 				Time:  can.Time,
 				Name:  self.Name})
-		}
-	}
+	//fmt.Println(can)
 	return true
 
 }

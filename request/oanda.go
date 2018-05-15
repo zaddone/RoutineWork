@@ -49,36 +49,12 @@ func init() {
 		Client = new(http.Client)
 	} else {
 		panic(0)
-		//	dialer, err := proxy.SOCKS5("tcp",*Proxy,
-		//	    nil,
-		//	    &net.Dialer {
-		//	        Timeout: 30 * time.Second,
-		//	        KeepAlive: 30 * time.Second,
-		//	    },
-		//	)
-		//	if err != nil {
-		//		panic(err)
-		//	}
-		//	transport := &http.Transport{
-		//	    Proxy: nil,
-		//	    Dial: dialer.Dial,
-		//	    TLSHandshakeTimeout: 10 * time.Second,
-		//	}
-		//	Client = &http.Client{Transport:transport}
 	}
 	err := InitAccounts(false)
 	if err != nil {
 		panic(err)
 	}
 	SetActiveAccount()
-	//Ins, err := GetInstruments()
-	//if err != nil {
-	//	panic(err)
-	//}
-	//Instr = Ins[*InsName]
-	//if Instr == nil {
-	//	panic("instr == nil")
-	//}
 
 }
 func ClientPut(path string, val io.Reader, da interface{}) error {
@@ -156,6 +132,7 @@ func SetActiveAccount() {
 	for _, acc := range Accounts {
 		if acc.Id == *Account_ID {
 			ActiveAccount = acc
+			ActiveAccount.SetInstruments()
 			return
 		}
 	}
@@ -168,117 +145,9 @@ func SetActiveAccount() {
 		SetActiveAccount()
 	}
 
-}
-
-func GetInstrumentsVal(n int, id string) (ins map[string]*Instrument, err error) {
-	le := len(Accounts)
-	if le == 0 {
-		err := InitAccounts(true)
-		if err != nil {
-			panic(err)
-		}
-		return GetInstrumentsVal(n, id)
-
-	}
-	if le >= n {
-		return nil, fmt.Errorf("invalid request")
-	}
-	Nacc := Accounts[n]
-	if Nacc.Id != id {
-		return nil, fmt.Errorf("invalid request %s %s", Nacc.Id, id)
-	}
-	//*Account_ID = id
-	//var Nacc *Account
-	//for _, acc := range Accounts {
-	//	if acc.Id == *Account_ID {
-	//		Nacc = acc
-	//		if len(acc.Instruments) != 0 {
-	//			return acc.Instruments, nil
-	//		}
-	//		break
-	//	}
-	//}
-	//if Nacc == nil {
-	//	err := InitAccounts(true)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//	return GetInstruments()
-	//}
-	if len(Accounts[n].Instruments) != 0 {
-		return Accounts[n].Instruments, nil
-	}
-
-	path := GetAccountPath()
-	path += "/instruments"
-	da := make(map[string]interface{})
-	err = ClientDO(path, &da)
-	if err != nil {
-		return nil, err
-	}
-	in := da["instruments"].([]interface{})
-	ins = make(map[string]*Instrument)
-	for _, n := range in {
-		//		fmt.Println(n.(InstrumentTmp).Name)
-		in := new(Instrument)
-		in.Init(n.(map[string]interface{}))
-
-		ins[in.Name] = in
-	}
-	Nacc.Instruments = ins
-	err = SaveAccounts()
-	return ins, err
-}
-func GetInstruments() (ins map[string]*Instrument, err error) {
-	//func GetInstruments(n int) (ins map[string]*Instrument,err error) {
-
-	var Nacc *Account
-	for _, acc := range Accounts {
-		if acc.Id == *Account_ID {
-			Nacc = acc
-			if len(acc.Instruments) != 0 {
-				return acc.Instruments, nil
-			}
-			break
-		}
-	}
-	if Nacc == nil {
-		err := InitAccounts(true)
-		if err != nil {
-			panic(err)
-		}
-		return GetInstruments()
-	}
-	//	if len(Accounts[n].Instruments) != 0 {
-	//		return Accounts[n].Instruments,nil
-	//	}
-
-	path := GetAccountPath()
-	path += "/instruments"
-	da := make(map[string]interface{})
-	err = ClientDO(path, &da)
-	if err != nil {
-		return nil, err
-	}
-	in := da["instruments"].([]interface{})
-	ins = make(map[string]*Instrument)
-	for _, n := range in {
-		//		fmt.Println(n.(InstrumentTmp).Name)
-		in := new(Instrument)
-		in.Init(n.(map[string]interface{}))
-
-		ins[in.Name] = in
-	}
-	Nacc.Instruments = ins
-	err = SaveAccounts()
-	return ins, err
 
 }
-func GetAccountPath() string {
 
-	return fmt.Sprintf("%s/accounts/%s", *Host, *Account_ID)
-
-}
 func InitAccounts(isU bool) (err error) {
 	if !isU {
 		err = ReadAccounts()
@@ -433,6 +302,31 @@ type Account struct {
 	Id          string                 `json:"id"`
 	Tags        []string               `json:"tags"`
 	Instruments map[string]*Instrument `json:"instruments"`
+}
+func (self *Account) GetAccountPath() string {
+	return fmt.Sprintf("%s/accounts/%s", *Host, self.Id)
+}
+func (self *Account) SetInstruments() error {
+	path := self.GetAccountPath()
+	path += "/instruments"
+	da := make(map[string]interface{})
+	err := ClientDO(path, &da)
+	if err != nil {
+		return err
+	}
+	ins := da["instruments"].([]interface{})
+	self.Instruments = make(map[string]*Instrument)
+	for _, n := range ins {
+		//		fmt.Println(n.(InstrumentTmp).Name)
+		in := new(Instrument)
+		in.Init(n.(map[string]interface{}))
+
+		self.Instruments[in.Name] = in
+	}
+	//Nacc.Instruments = ins
+	return SaveAccounts()
+	//return ins, err
+
 }
 
 //func GetAccountID() string {

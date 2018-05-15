@@ -36,10 +36,11 @@ func (s *server) GetLastTime(InsName *pb.InstrumentSimple, stream pb.Greeter_Get
 			ctx, cancel := context.WithCancel(context.Background())
 			ser.Init(ctx)
 			key := int(time.Now().UnixNano())
-			inc.ServerChan[key] = ser
+			inc.ServerChanMap.Add(key,ser)
 			defer func() {
 				log.Println("lastTime over")
-				delete(inc.ServerChan, key)
+				inc.ServerChanMap.Del(key)
+				//delete(inc.ServerChan, key)
 				cancel()
 				ser.Clear()
 
