@@ -43,13 +43,9 @@ func (self *ServerChan) In(f TimeCache) {
 			log.Print("done stop")
 			self.Clear()
 			return
+		case self.TimeChan<-f:
+			return
 
-		default:
-			//log.Println(_f)
-			if self.TimeChan == nil {
-				return
-			}
-			self.TimeChan <- f
 		}
 	}(f, ctx)
 }
