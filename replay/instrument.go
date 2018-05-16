@@ -43,16 +43,17 @@ func (self *ServerChan) In(f TimeCache) {
 			log.Print("done stop")
 			self.Clear()
 			return
-		case self.TimeChan<-f:
-			return
-
+		default:
+			if self.TimeChan != nil {
+				self.TimeChan<-f
+			}
 		}
 	}(f, ctx)
 }
 
 func (self *ServerChan) Init(ctx context.Context) {
 	self.ctx = ctx
-	self.TimeChan = make(chan TimeCache, 5)
+	self.TimeChan = make(chan TimeCache, 50)
 }
 
 func (self *ServerChan) Clear() {
