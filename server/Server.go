@@ -40,9 +40,7 @@ func (s *server) GetLastTime(InsName *pb.InstrumentSimple, stream pb.Greeter_Get
 			defer func() {
 				log.Println("lastTime over")
 				inc.ServerChanMap.Del(key)
-				//delete(inc.ServerChan, key)
 				cancel()
-				ser.Clear()
 
 			}()
 			return ser.Out(func(ti *replay.TimeCache) error {

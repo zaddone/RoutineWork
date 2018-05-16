@@ -41,12 +41,9 @@ func (self *ServerChan) In(f TimeCache) {
 		select {
 		case <-_ctx.Done():
 			log.Print("done stop")
-			//self.Clear()
 			return
-		default:
-			if self.TimeChan != nil {
-				self.TimeChan<-f
-			}
+		case self.TimeChan<-f:
+			return
 		}
 	}(f, ctx)
 }
@@ -56,12 +53,6 @@ func (self *ServerChan) Init(ctx context.Context) {
 	self.TimeChan = make(chan TimeCache, 5000)
 }
 
-func (self *ServerChan) Clear() {
-	if self.TimeChan != nil {
-		close(self.TimeChan)
-		self.TimeChan = nil
-	}
-}
 type ServerChanMap struct{
 	ServerChans     map[int]*ServerChan
 	sync.RWMutex
