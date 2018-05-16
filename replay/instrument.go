@@ -41,7 +41,7 @@ func (self *ServerChan) In(f TimeCache) {
 		select {
 		case <-_ctx.Done():
 			log.Print("done stop")
-			self.Clear()
+			//self.Clear()
 			return
 		default:
 			if self.TimeChan != nil {
@@ -53,7 +53,7 @@ func (self *ServerChan) In(f TimeCache) {
 
 func (self *ServerChan) Init(ctx context.Context) {
 	self.ctx = ctx
-	self.TimeChan = make(chan TimeCache, 50)
+	self.TimeChan = make(chan TimeCache, 5000)
 }
 
 func (self *ServerChan) Clear() {
