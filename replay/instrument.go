@@ -40,7 +40,7 @@ func (self *ServerChan) In(f TimeCache) {
 	go func(_f TimeCache, _ctx context.Context) {
 		select {
 		case <-_ctx.Done():
-			log.Print("done stop")
+			//log.Print("done stop")
 			return
 		case self.TimeChan<-f:
 			return
