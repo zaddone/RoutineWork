@@ -4,7 +4,7 @@ import (
 	//"../request"
 	"context"
 	//"flag"
-	"log"
+	//"log"
 	"path/filepath"
 	"sync"
 	//"strings"
@@ -87,6 +87,11 @@ type InstrumentCache struct {
 	ServerChanMap     ServerChanMap
 }
 
+func NewInstrumentCache(Instr string) *InstrumentCache {
+	var inc InstrumentCache
+	inc.Init(Instr)
+	return &inc
+}
 
 func (self *InstrumentCache) Init(Instr string) {
 	self.ServerChanMap.Init()

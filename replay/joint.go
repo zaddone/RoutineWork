@@ -14,8 +14,8 @@ type Joint struct {
 	Diff    float64
 }
 
-func NewJoint(cans []*request.Candles) (jo *Joint) {
-	jo = new(Joint)
+func NewJoint(cans []*request.Candles) *Joint {
+	var jo Joint
 	le := len(cans)
 	jo.Cans = make([]*request.Candles, le)
 	jo.SumLong = 0
@@ -24,7 +24,7 @@ func NewJoint(cans []*request.Candles) (jo *Joint) {
 		jo.Cans[i] = _ca
 	}
 	jo.Diff = cans[le-1].GetMidAverage() - cans[0].GetMidAverage()
-	return jo
+	return &jo
 }
 
 func (self *Joint) ReadNext(hand func(jo *Joint) bool) {
@@ -78,24 +78,25 @@ func (self *Joint) merge() {
 func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 	jo = self
 	update = false
+	canVal := can.GetMidAverage()
+	var tmpDiff float64
 	defer func() {
 		jo.Cans = append(jo.Cans, can)
 		jo.SumLong += can.GetMidLong()
-		if len(jo.Cans) > 1 {
-			jo.Diff = can.GetMidAverage() - jo.Cans[0].GetMidAverage()
-			if (jo.Last != nil) && ((jo.Diff > 0) == (jo.Last.Diff > 0)) {
-				jo.merge()
-				update = true
-			}
-
-		}
+		jo.Diff = tmpDiff
 	}()
 	le := len(self.Cans)
 	if le < 2 {
 		return
 	}
+
+	tmpDiff = canVal - jo.Cans[0].GetMidAverage()
+	if (tmpDiff > 0) != (self.Diff > 0) {
+		jo.merge()
+		return
+	}
+
 	ave := self.GetLongAve()
-	canVal := can.GetMidAverage()
 	var dif, maxDif float64 = 0, 0
 	var maxId int = 0
 	for i := 1; i < le; i++ {
@@ -108,10 +109,10 @@ func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 			}
 		}
 	}
-	if maxDif == 0 || maxId == 0 {
+	if maxId == 0 {
 		return
 	}
-	if ave > math.Abs(canVal-self.Cans[0].GetMidAverage()) {
+	if ave > math.Abs(maxDif) {
 		return
 	}
 	jo = self.split(maxId)

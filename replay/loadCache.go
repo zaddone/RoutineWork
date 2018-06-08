@@ -22,6 +22,13 @@ type CacheFile struct {
 	Path   string
 	EndCan *request.Candles
 }
+func NewCacheFile(name, path string, fi os.FileInfo, Max int) (*CacheFile,error) {
+
+	var cf CacheFile
+	err := cf.Init(name,path,fi,Max)
+	return &cf,err
+
+}
 
 func (self *CacheFile) Init(name, path string, fi os.FileInfo, Max int) (err error) {
 
@@ -59,7 +66,7 @@ type Cache struct {
 	DiffLong  float64
 	LastCan   *request.Candles
 	EndJoint  *Joint
-	BeginJoin *Joint
+	BeginJoint *Joint
 	//Id        int
 	lastCache *Cache
 	par       *InstrumentCache
@@ -75,7 +82,7 @@ func NewCache(name string, scale int64, p *InstrumentCache) (ca *Cache) {
 		EndJoint:    new(Joint),
 		EndtimeChan: make(chan int64, 10),
 		par:         p}
-	ca.BeginJoin = ca.EndJoint
+	ca.BeginJoint = ca.EndJoint
 	return ca
 
 }
@@ -92,8 +99,9 @@ func (self *Cache) Load(name, path string) {
 			if fi.IsDir() {
 				return er
 			}
-			cf = new(CacheFile)
-			er = cf.Init(name, pa, fi, int(86400/self.Scale+1)*2)
+			//cf = new(CacheFile)
+			//er = cf.Init(name, pa, fi, int(86400/self.Scale+1)*2)
+			cf,er := NewCacheFile(name, pa, fi, int(86400/self.Scale+1)*2)
 			if er == nil {
 				self.FutureChan <- cf
 			} else {
@@ -140,35 +148,22 @@ func (self *Cache) CheckUpdate(can *request.Candles) bool {
 
 }
 func (self *Cache) Sensor(cas []*Cache) {
-	//var err error
-	//var lastCan *request.Candles
+	var w sync.WaitGroup
 	self.Read(func(can *request.Candles) {
-		if !self.CheckUpdate(can) {
+		if !self.UpdateJoint(can) {
 			return
 		}
 		endTime := can.Time + self.Scale
-
-		w := new(sync.WaitGroup)
+		w.Add(len(cas))
 		for _, ca := range cas {
-			w.Add(1)
-			go func(_ca *Cache) {
+			go func(_ca *Cache,_w *sync.WaitGroup) {
 				_ca.EndtimeChan <- endTime
 				<-_ca.Stop
 				w.Done()
-			}(ca)
+			}(ca,&w)
 		}
 		w.Wait()
-
-		//for _, ca := range cas {
-		//	if ca.LastCan != nil {
-		//		if ca.LastCan.Time+ca.Scale > endTime {
-		//			panic(100)
-		//		}
-		//	}
-		//}
-
 		fmt.Printf("%s\r", time.Unix(endTime, 0))
-		//self.CheckTemplagesTest(can, ca_id)
 
 	})
 
@@ -204,18 +199,18 @@ func (self *Cache) UpdateJoint(can *request.Candles) bool {
 	if up {
 		//endId := len(CacheList) - 1
 		if self.lastCache == nil {
-			if self.EndJoint.Last != nil && self.EndJoint.Last != self.BeginJoin {
-				self.BeginJoin = self.EndJoint.Last
-				self.BeginJoin.Last = nil
+			if self.EndJoint.Last != nil && self.EndJoint.Last != self.BeginJoint {
+				self.BeginJoint = self.EndJoint.Last
+				self.BeginJoint.Last = nil
 			}
 		} else {
 			//endCache := CacheList[endId]
-			if len(self.lastCache.BeginJoin.Cans) > 0 {
-				endTime := self.lastCache.BeginJoin.Cans[0].Time
-				self.BeginJoin.ReadNext(func(jo *Joint) bool {
+			if len(self.lastCache.BeginJoint.Cans) > 0 {
+				endTime := self.lastCache.BeginJoint.Cans[0].Time
+				self.BeginJoint.ReadNext(func(jo *Joint) bool {
 					if len(jo.Cans) > 0 && jo.Cans[0].Time >= endTime {
 						jo.Last = nil
-						self.BeginJoin = jo
+						self.BeginJoint = jo
 						return true
 					}
 					return false
