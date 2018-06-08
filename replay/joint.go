@@ -79,18 +79,17 @@ func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 	jo = self
 	update = false
 	canVal := can.GetMidAverage()
-	var tmpDiff float64
 	defer func() {
 		jo.Cans = append(jo.Cans, can)
 		jo.SumLong += can.GetMidLong()
-		jo.Diff = tmpDiff
+		jo.Diff = canVal - jo.Cans[0].GetMidAverage()
 	}()
 	le := len(self.Cans)
 	if le < 2 {
 		return
 	}
 
-	tmpDiff = canVal - jo.Cans[0].GetMidAverage()
+	tmpDiff := canVal - jo.Cans[0].GetMidAverage()
 	if (tmpDiff > 0) != (self.Diff > 0) {
 		jo.merge()
 		return

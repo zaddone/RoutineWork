@@ -150,6 +150,7 @@ func (self *Cache) CheckUpdate(can *request.Candles) bool {
 func (self *Cache) Sensor(cas []*Cache) {
 	var w sync.WaitGroup
 	self.Read(func(can *request.Candles) {
+		//if !self.CheckUpdate(can) {
 		if !self.UpdateJoint(can) {
 			return
 		}
@@ -208,12 +209,17 @@ func (self *Cache) UpdateJoint(can *request.Candles) bool {
 			if len(self.lastCache.BeginJoint.Cans) > 0 {
 				endTime := self.lastCache.BeginJoint.Cans[0].Time
 				self.BeginJoint.ReadNext(func(jo *Joint) bool {
-					if len(jo.Cans) > 0 && jo.Cans[0].Time >= endTime {
-						jo.Last = nil
-						self.BeginJoint = jo
-						return true
+					if len(jo.Cans) > 0 && jo.Cans[0].Time < endTime {
+						return false
 					}
-					return false
+					if self.BeginJoint != jo {
+						self.BeginJoint.Next = nil
+						self.BeginJoint = jo
+						self.BeginJoint.Last = nil
+
+						fmt.Println(self.Name,jo.Cans[0].Time,self.BeginJoint.Cans[0].Time,endTime)
+					}
+					return true
 				})
 			}
 		}
