@@ -10,7 +10,7 @@ import (
 	//	"net"
 	//	"golang.org/x/net/proxy"
 	"encoding/json"
-	"flag"
+	//"flag"
 	"path/filepath"
 	"time"
 
@@ -26,26 +26,20 @@ var (
 	Header   http.Header
 	//Instr    *Instrument
 	ActiveAccount *Account
+	Conf *Config
 
-	Account_ID    = flag.String("accountid", "101-011-2471429-001", "Account ID")
-	Authorization = flag.String("auth", "6391c51b9a8f95a829f97357097b5102-c1e49edf86b57e0ea0ab32441f06a1c2", "Auth")
-	//	Proxy = flag.String("p","192.168.1.70:1081","proxy")
-	Proxy   = flag.String("proxy", "", "proxy")
-	LogFile = flag.String("L", "LogInfo.log", "LogInfo")
-	Host    = flag.String("h", "https://api-fxpractice.oanda.com/v3", "host")
-	//InsName   = flag.String("n", "EUR_JPY", "INS NAME")
-	BEGINTIME = flag.String("begintime", "2009-01-01T00:00:00", "2009-01-01T00:00:00")
 )
 
 func init() {
-	flag.Parse()
+	//flag.Parse()
+	Conf = NewConfig()
 	Header = make(http.Header)
-	Header.Add("Authorization", fmt.Sprintf("Bearer %s", *Authorization))
+	Header.Add("Authorization", fmt.Sprintf("Bearer %s", Conf.Authorization))
 	Header.Add("Connection", "Keep-Alive")
 	Header.Add("Accept-Datetime-Format", "UNIX")
 	Header.Add("Content-type", "application/json")
 
-	if *Proxy == "" {
+	if Conf.Proxy == "" {
 		Client = new(http.Client)
 	} else {
 		panic(0)
@@ -130,7 +124,7 @@ func SetActiveAccount() {
 	//var Nacc *Account
 	//ActiveAccount = nil
 	for _, acc := range Accounts {
-		if acc.Id == *Account_ID {
+		if acc.Id == Conf.Account_ID {
 			ActiveAccount = acc
 			ActiveAccount.SetInstruments()
 			return
@@ -156,7 +150,7 @@ func InitAccounts(isU bool) (err error) {
 		}
 	}
 	da := make(map[string][]*Account)
-	err = ClientDO(*Host+"/accounts", &da)
+	err = ClientDO(Conf.Host+"/accounts", &da)
 	if err != nil {
 		return err
 	}
@@ -169,7 +163,7 @@ func InitAccounts(isU bool) (err error) {
 
 }
 func SaveAccounts() error {
-	f, err := os.OpenFile(*LogFile, os.O_CREATE|os.O_TRUNC|os.O_RDWR|os.O_SYNC, 0777)
+	f, err := os.OpenFile(Conf.LogFile, os.O_CREATE|os.O_TRUNC|os.O_RDWR|os.O_SYNC, 0777)
 	if err != nil {
 		return err
 	}
@@ -185,12 +179,12 @@ func SaveAccounts() error {
 	return nil
 }
 func ReadAccounts() error {
-	fi, err := os.Stat(*LogFile)
+	fi, err := os.Stat(Conf.LogFile)
 	if err != nil {
 		return err
 	}
 	data := make([]byte, fi.Size())
-	f, err := os.Open(*LogFile)
+	f, err := os.Open(Conf.LogFile)
 	if err != nil {
 		return err
 	}
@@ -266,7 +260,7 @@ func Down(name string, from, to int64, gr int64, gran string, Handle func(*Candl
 }
 func GetCandlesHandle(Ins_name, granularity string, from, count int64, f func(c interface{}) error) (err error) {
 
-	path := fmt.Sprintf("%s/instruments/%s/candles?", *Host, Ins_name)
+	path := fmt.Sprintf("%s/instruments/%s/candles?", Conf.Host, Ins_name)
 	uv := url.Values{}
 	uv.Add("granularity", granularity)
 	uv.Add("price", "M")
@@ -304,7 +298,7 @@ type Account struct {
 	Instruments map[string]*Instrument `json:"instruments"`
 }
 func (self *Account) GetAccountPath() string {
-	return fmt.Sprintf("%s/accounts/%s", *Host, self.Id)
+	return fmt.Sprintf("%s/accounts/%s", Conf.Host, self.Id)
 }
 func (self *Account) SetInstruments() error {
 	path := self.GetAccountPath()

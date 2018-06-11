@@ -114,7 +114,7 @@ func (self *Cache) Load(name, path string) {
 	}
 	var begin int64
 	if cf == nil {
-		beginT, err := time.Parse("2006-01-02T15:04:05", *request.BEGINTIME)
+		beginT, err := time.Parse("2006-01-02T15:04:05", request.Conf.BEGINTIME)
 		if err != nil {
 			panic(err)
 		}
