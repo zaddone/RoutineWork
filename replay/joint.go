@@ -26,6 +26,23 @@ func NewJoint(cans []*request.Candles) *Joint {
 	jo.Diff = cans[le-1].GetMidAverage() - cans[0].GetMidAverage()
 	return &jo
 }
+func (self *Joint) ReadLast(hand func(jo *Joint) bool) {
+
+	if hand(self) {
+		return
+	}
+	if self.Last != nil {
+		self.Last.ReadLast(hand)
+	}
+	return
+
+}
+func (self *Joint)Cut(){
+	if self.Last != nil {
+		self.Last.Next= nil
+		self.Last = nil
+	}
+}
 
 func (self *Joint) ReadNext(hand func(jo *Joint) bool) {
 
@@ -63,15 +80,19 @@ func (self *Joint) split(id int) (jo *Joint) {
 }
 
 func (self *Joint) merge() {
-	if self.Last == nil {
+
+	LastC := self.Last
+	if LastC == nil {
 		return
 	}
-	self.Cans = append(self.Last.Cans, self.Cans...)
-	self.SumLong += self.Last.SumLong
-	self.Last = self.Last.Last
+	LastC.Next = nil
+	self.Last = LastC.Last
 	if self.Last != nil {
+		LastC.Last = nil
 		self.Last.Next = self
 	}
+	self.Cans = append(LastC.Cans, self.Cans...)
+	self.SumLong += LastC.SumLong
 
 }
 

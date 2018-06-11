@@ -28,7 +28,7 @@ var (
 	ActiveAccount *Account
 
 	Account_ID    = flag.String("accountid", "101-011-2471429-001", "Account ID")
-	Authorization = flag.String("auth", "07b98f22c1eafe0359d287f68189a6db-2ed5b9d4ee662581965275d7a6dbcb58", "Auth")
+	Authorization = flag.String("auth", "6391c51b9a8f95a829f97357097b5102-c1e49edf86b57e0ea0ab32441f06a1c2", "Auth")
 	//	Proxy = flag.String("p","192.168.1.70:1081","proxy")
 	Proxy   = flag.String("proxy", "", "proxy")
 	LogFile = flag.String("L", "LogInfo.log", "LogInfo")

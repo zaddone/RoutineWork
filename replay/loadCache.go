@@ -7,7 +7,7 @@ import (
 	//	"math"
 	"os"
 	"path/filepath"
-	"sync"
+	//"sync"
 	"time"
 )
 
@@ -60,7 +60,8 @@ type Cache struct {
 	Scale       int64
 	Name        string
 	FutureChan  chan *CacheFile
-	Stop        chan bool
+	//Stop        chan bool
+	//w           *sync.WaitGroup
 	EndtimeChan chan int64
 	//TmpCan      []*request.Candles
 	DiffLong  float64
@@ -78,9 +79,9 @@ func NewCache(name string, scale int64, p *InstrumentCache) (ca *Cache) {
 		Name:        name,
 		Scale:       scale,
 		FutureChan:  make(chan *CacheFile, 10),
-		Stop:        make(chan bool, 1),
+		//Stop:        make(chan bool, 1),
 		EndJoint:    new(Joint),
-		EndtimeChan: make(chan int64, 10),
+		EndtimeChan: make(chan int64, 1),
 		par:         p}
 	ca.BeginJoint = ca.EndJoint
 	return ca
@@ -101,7 +102,7 @@ func (self *Cache) Load(name, path string) {
 			}
 			//cf = new(CacheFile)
 			//er = cf.Init(name, pa, fi, int(86400/self.Scale+1)*2)
-			cf,er := NewCacheFile(name, pa, fi, int(86400/self.Scale+1)*2)
+			cf,er = NewCacheFile(name, pa, fi, int(86400/self.Scale+1)*2)
 			if er == nil {
 				self.FutureChan <- cf
 			} else {
@@ -117,12 +118,12 @@ func (self *Cache) Load(name, path string) {
 		if err != nil {
 			panic(err)
 		}
-		begin = beginT.Unix()
+		begin = beginT.UTC().Unix()
 	} else {
 		begin = cf.EndCan.Time + self.Scale
 	}
-	cf = new(CacheFile)
-	cf.Can = make(chan *request.Candles, 1000)
+	cf = &CacheFile{Can:make(chan *request.Candles, 1000)}
+	//cf.Can = make(chan *request.Candles, 1000)
 	self.FutureChan <- cf
 	request.Down(name, begin, 0, self.Scale, self.Name, func(can *request.Candles) {
 		cf.Can <- can
@@ -139,73 +140,63 @@ func (self *Cache) CheckUpdate(can *request.Candles) bool {
 		}
 	}
 	self.LastCan = can
-	self.par.ServerChanMap.Send(TimeCache{
-				Scale: self.Scale,
-				Time:  can.Time,
-				Name:  self.Name})
 	//fmt.Println(can)
 	return true
 
 }
 func (self *Cache) Sensor(cas []*Cache) {
-	var w sync.WaitGroup
+	calen := len(cas)
 	self.Read(func(can *request.Candles) {
-		//if !self.CheckUpdate(can) {
 		if !self.UpdateJoint(can) {
 			return
 		}
 		endTime := can.Time + self.Scale
-		w.Add(len(cas))
+		self.par.w.Add(calen)
 		for _, ca := range cas {
-			go func(_ca *Cache,_w *sync.WaitGroup) {
+			go func(_ca *Cache) {
 				_ca.EndtimeChan <- endTime
-				<-_ca.Stop
-				w.Done()
-			}(ca,&w)
+			}(ca)
 		}
-		w.Wait()
+		self.par.w.Wait()
 		fmt.Printf("%s\r", time.Unix(endTime, 0))
-
 	})
-
 }
 
 func (self *Cache) SyncRun(hand func(can *request.Candles) bool) {
-	endTime := <-self.EndtimeChan
-	var h func(can *request.Candles)
-	h = func(can *request.Candles) {
-		if can.Time+self.Scale <= endTime {
-			hand(can)
-			return
-		}
-		if len(self.EndtimeChan) == 0 {
-			if len(self.Stop) == 0 {
-				self.Stop <- true
+	self.Read(func(can *request.Candles){
+		for{
+			endTime := <-self.EndtimeChan
+			if can.Time+self.Scale <= endTime {
+				hand(can)
+				self.par.w.Done()
+				return
 			}
+			self.par.w.Done()
 		}
-		endTime = <-self.EndtimeChan
-		h(can)
-		return
-	}
-	self.Read(h)
+	})
 }
 
-func (self *Cache) UpdateJoint(can *request.Candles) bool {
+func (self *Cache) UpdateJoint(can *request.Candles) ( up bool) {
 
 	if !self.CheckUpdate(can) {
 		return false
 	}
-	var up bool
 	self.EndJoint, up = self.EndJoint.AppendCans(can)
+	self.par.Monitor(self,can,up)
 	if up {
-		//endId := len(CacheList) - 1
 		if self.lastCache == nil {
-			if self.EndJoint.Last != nil && self.EndJoint.Last != self.BeginJoint {
-				self.BeginJoint = self.EndJoint.Last
-				self.BeginJoint.Last = nil
-			}
+			j :=0
+			self.EndJoint.ReadLast(func(jo *Joint) bool {
+				j++
+				if j < 4 {
+					return false
+				}
+				jo.Cut()
+				self.BeginJoint = jo
+				fmt.Println("end cache",self.Name,time.Unix(jo.Cans[0].Time,0))
+				return true
+			})
 		} else {
-			//endCache := CacheList[endId]
 			if len(self.lastCache.BeginJoint.Cans) > 0 {
 				endTime := self.lastCache.BeginJoint.Cans[0].Time
 				self.BeginJoint.ReadNext(func(jo *Joint) bool {
@@ -213,11 +204,9 @@ func (self *Cache) UpdateJoint(can *request.Candles) bool {
 						return false
 					}
 					if self.BeginJoint != jo {
-						self.BeginJoint.Next = nil
 						self.BeginJoint = jo
-						self.BeginJoint.Last = nil
-
-						fmt.Println(self.Name,jo.Cans[0].Time,self.BeginJoint.Cans[0].Time,endTime)
+						jo.Cut()
+						fmt.Println(self.Name,self.BeginJoint.Cans[0].Time,endTime)
 					}
 					return true
 				})

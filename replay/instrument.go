@@ -1,7 +1,7 @@
 package replay
 
 import (
-	//"../request"
+	"github.com/zaddone/RoutineWork/request"
 	"context"
 	//"flag"
 	//"log"
@@ -18,14 +18,14 @@ type TimeCache struct {
 }
 
 type ServerChan struct {
-	TimeChan chan TimeCache
+	TimeChan chan *TimeCache
 	ctx      context.Context
 }
 
 func (self *ServerChan) Out(f func(tc *TimeCache) error) (err error) {
 	for {
 		t := <-self.TimeChan
-		err = f(&t)
+		err = f(t)
 		if err != nil {
 			return err
 		}
@@ -34,10 +34,10 @@ func (self *ServerChan) Out(f func(tc *TimeCache) error) (err error) {
 	return err
 }
 
-func (self *ServerChan) In(f TimeCache) {
+func (self *ServerChan) In(f *TimeCache) {
 	ctx, _ := context.WithCancel(self.ctx)
 
-	go func(_f TimeCache, _ctx context.Context) {
+	go func(_f *TimeCache, _ctx context.Context) {
 		select {
 		case <-_ctx.Done():
 			//log.Print("done stop")
@@ -50,12 +50,17 @@ func (self *ServerChan) In(f TimeCache) {
 
 func (self *ServerChan) Init(ctx context.Context) {
 	self.ctx = ctx
-	self.TimeChan = make(chan TimeCache, 5000)
+	self.TimeChan = make(chan *TimeCache, 5000)
 }
 
 type ServerChanMap struct{
 	ServerChans     map[int]*ServerChan
 	sync.RWMutex
+}
+func NewServerChanMap() *ServerChanMap {
+	var scm ServerChanMap
+	scm.Init()
+	return &scm
 }
 func (self *ServerChanMap) Init(){
 	self.ServerChans = make(map[int]*ServerChan)
@@ -65,7 +70,7 @@ func (self *ServerChanMap) Del(k int){
 	delete(self.ServerChans,k)
 	self.Unlock()
 }
-func (self *ServerChanMap) Send(tc TimeCache){
+func (self *ServerChanMap) Send(tc *TimeCache){
 	self.Lock()
 	for _,ser := range self.ServerChans {
 		ser.In(tc)
@@ -84,16 +89,49 @@ type InstrumentCache struct {
 	GranularityMap map[string]int64
 	CacheList      []*Cache
 	Name           string
-	ServerChanMap     ServerChanMap
+	ServerChanMap  ServerChanMap
+	w		sync.WaitGroup
+	//signal Signal
 }
 
 func NewInstrumentCache(Instr string) *InstrumentCache {
 	var inc InstrumentCache
 	inc.Init(Instr)
+	//inc.signal = SignalSys
 	return &inc
+}
+func (self *InstrumentCache) Monitor(ca *Cache,can *request.Candles,ty bool) {
+
+	self.ServerChanMap.Send(&TimeCache{
+		Scale: ca.Scale,
+		Time:  can.Time,
+		Name:  ca.Name})
+
+	if SignalSys != nil {
+		//SignalSys.Show()
+		sigData :=&SignalData{InsCache:self,
+					Ty:ty,
+					NowCache:ca,
+					Can:can}
+
+		for _,si := range SignalSys {
+			si.Check(sigData)
+		}
+	}
+
+}
+
+func (self *InstrumentCache) GetHightCache(ca *Cache) *Cache {
+	for i,cache := range self.CacheList {
+		if cache == ca {
+			return self.CacheList[i+1]
+		}
+	}
+	return nil
 }
 
 func (self *InstrumentCache) Init(Instr string) {
+
 	self.ServerChanMap.Init()
 	//self.ServerChan = make(map[int]*ServerChan)
 	self.Name = Instr
