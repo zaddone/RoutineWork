@@ -1,4 +1,3 @@
 /*_*/
 *.log
 run.go
-/signal/

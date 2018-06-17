@@ -10,7 +10,7 @@ import (
 var (
 	InsCaches []*InstrumentCache
 	InsName   = flag.String("n", "EUR_JPY", "INS NAME")
-	SignalSys []Signal = nil
+	//SignalSys []Signal = nil
 )
 type SignalData struct {
 

@@ -97,6 +97,7 @@ func (self *Joint) merge() {
 }
 
 func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
+
 	jo = self
 	update = false
 	canVal := can.GetMidAverage()
@@ -110,8 +111,8 @@ func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 		return
 	}
 
-	tmpDiff := canVal - jo.Cans[0].GetMidAverage()
-	if (tmpDiff > 0) != (self.Diff > 0) {
+	//tmpDiff := canVal - jo.Cans[0].GetMidAverage()
+	if ((canVal - jo.Cans[0].GetMidAverage()) > 0) != (self.Diff > 0) {
 		jo.merge()
 		return
 	}
@@ -140,6 +141,7 @@ func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 	return
 
 }
+
 func (self *Joint) GetLongAve() float64 {
 	return self.SumLong / float64(len(self.Cans))
 }
