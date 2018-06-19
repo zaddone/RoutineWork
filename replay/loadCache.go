@@ -69,8 +69,10 @@ type Cache struct {
 	EndJoint  *Joint
 	BeginJoint *Joint
 	//Id        int
-	lastCache *Cache
+	LastCache *Cache
 	par       *InstrumentCache
+	IsSplit bool
+	IsUpdate bool
 }
 
 func NewCache(name string, scale int64, p *InstrumentCache) (ca *Cache) {
@@ -146,6 +148,7 @@ func (self *Cache) CheckUpdate(can *request.Candles) bool {
 }
 func (self *Cache) Sensor(cas []*Cache) {
 	calen := len(cas)
+	self.IsUpdate = true
 	self.Read(func(can *request.Candles) {
 		if !self.UpdateJoint(can) {
 			return
@@ -158,6 +161,8 @@ func (self *Cache) Sensor(cas []*Cache) {
 			}(ca)
 		}
 		self.par.w.Wait()
+
+		self.par.Signal()
 		fmt.Printf("%s\r", time.Unix(endTime, 0))
 	})
 }
@@ -165,9 +170,11 @@ func (self *Cache) Sensor(cas []*Cache) {
 func (self *Cache) SyncRun(hand func(can *request.Candles) bool) {
 	self.Read(func(can *request.Candles){
 		for{
+			self.IsUpdate = false
 			endTime := <-self.EndtimeChan
 			if can.Time+self.Scale <= endTime {
 				hand(can)
+				self.IsUpdate = true
 				self.par.w.Done()
 				return
 			}
@@ -176,15 +183,16 @@ func (self *Cache) SyncRun(hand func(can *request.Candles) bool) {
 	})
 }
 
-func (self *Cache) UpdateJoint(can *request.Candles) ( up bool) {
+func (self *Cache) UpdateJoint(can *request.Candles) ( bool) {
 
 	if !self.CheckUpdate(can) {
 		return false
 	}
-	self.EndJoint, up = self.EndJoint.AppendCans(can)
-	self.par.Monitor(self,can,up)
-	if up {
-		if self.lastCache == nil {
+	self.par.Monitor(self,can)
+	self.EndJoint, self.IsSplit = self.EndJoint.AppendCans(can)
+	//self.par.SplitCache <- self
+	if self.IsSplit {
+		if self.LastCache == nil {
 			j :=0
 			self.EndJoint.ReadLast(func(jo *Joint) bool {
 				j++
@@ -197,8 +205,8 @@ func (self *Cache) UpdateJoint(can *request.Candles) ( up bool) {
 				return true
 			})
 		} else {
-			if len(self.lastCache.BeginJoint.Cans) > 0 {
-				endTime := self.lastCache.BeginJoint.Cans[0].Time
+			if len(self.LastCache.BeginJoint.Cans) > 0 {
+				endTime := self.LastCache.BeginJoint.Cans[0].Time
 				self.BeginJoint.ReadNext(func(jo *Joint) bool {
 					if len(jo.Cans) > 0 && jo.Cans[0].Time < endTime {
 						return false

@@ -12,6 +12,7 @@ type Joint struct {
 	Dur     *bool
 	SumLong float64
 	Diff    float64
+	MaxDiff float64
 }
 
 func NewJoint(cans []*request.Candles) *Joint {
@@ -118,14 +119,15 @@ func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 	}
 
 	ave := self.GetLongAve()
-	var dif, maxDif float64 = 0, 0
+	var dif float64 = 0
 	var maxId int = 0
+	self.MaxDiff = 0
 	for i := 1; i < le; i++ {
 		dif = canVal - self.Cans[i].GetMidAverage()
 		if (dif > 0) != (self.Diff > 0) {
 			dif = math.Abs(dif)
-			if (dif > ave) && (dif > maxDif) {
-				maxDif = dif
+			if (dif > ave) && (dif > self.MaxDiff) {
+				self.MaxDiff = dif
 				maxId = i
 			}
 		}
@@ -133,7 +135,7 @@ func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 	if maxId == 0 {
 		return
 	}
-	if ave > math.Abs(maxDif) {
+	if ave > self.MaxDiff {
 		return
 	}
 	jo = self.split(maxId)

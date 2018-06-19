@@ -4,24 +4,16 @@ import (
 	"log"
 	"flag"
 	"strings"
-	"github.com/zaddone/RoutineWork/request"
+	//"github.com/zaddone/RoutineWork/request"
 )
 
 var (
 	InsCaches []*InstrumentCache
 	InsName   = flag.String("n", "EUR_JPY", "INS NAME")
-	//SignalSys []Signal = nil
+	SignalGroup []Signal = nil
 )
-type SignalData struct {
-
-	Ty bool
-	InsCache *InstrumentCache
-	NowCache *Cache
-	Can *request.Candles
-
-}
 type Signal interface{
-	Check(da *SignalData)
+	Check(insCache *InstrumentCache)
 	Show()
 }
 
