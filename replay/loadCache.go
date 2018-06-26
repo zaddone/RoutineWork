@@ -72,7 +72,7 @@ type Cache struct {
 	LastCache *Cache
 	par       *InstrumentCache
 	IsSplit bool
-	IsUpdate bool
+	//IsUpdate bool
 }
 
 func NewCache(name string, scale int64, p *InstrumentCache) (ca *Cache) {
@@ -148,7 +148,8 @@ func (self *Cache) CheckUpdate(can *request.Candles) bool {
 }
 func (self *Cache) Sensor(cas []*Cache) {
 	calen := len(cas)
-	self.IsUpdate = true
+	//self.IsUpdate = false
+	var date string = ""
 	self.Read(func(can *request.Candles) {
 		if !self.UpdateJoint(can) {
 			return
@@ -157,25 +158,40 @@ func (self *Cache) Sensor(cas []*Cache) {
 		self.par.w.Add(calen)
 		for _, ca := range cas {
 			go func(_ca *Cache) {
+				_ca.IsSplit = false
 				_ca.EndtimeChan <- endTime
 			}(ca)
 		}
 		self.par.w.Wait()
 
+		day:= time.Unix(endTime, 0)
+		d := day.Format("2006-01")
+		if d != date {
+			fmt.Printf("%s %.2f---------------------\r\n",date,SignalBox)
+			date = d
+			SignalBox=[6]float64{0,0,0,0,0,0}
+		}
+		fmt.Printf("%s %.2f\r", day , SignalBox)
 		self.par.Signal()
-		fmt.Printf("%s\r", time.Unix(endTime, 0))
+
+		//if cas[0].LastCache != nil {
+		//	fmt.Printf("%s %s\r", time.Unix(endTime, 0),time.Unix(cas[0].LastCan.Time,0))
+		//}else{
+		//}
 	})
 }
 
 func (self *Cache) SyncRun(hand func(can *request.Candles) bool) {
 	self.Read(func(can *request.Candles){
+		//self.IsUpdate = false
 		for{
-			self.IsUpdate = false
 			endTime := <-self.EndtimeChan
 			if can.Time+self.Scale <= endTime {
 				hand(can)
-				self.IsUpdate = true
-				self.par.w.Done()
+				//fmt.Println(self.Name)
+				//self.IsUpdate = true
+				//self.par.w.Done()
+				self.EndtimeChan <- endTime
 				return
 			}
 			self.par.w.Done()
@@ -189,8 +205,8 @@ func (self *Cache) UpdateJoint(can *request.Candles) ( bool) {
 		return false
 	}
 	self.par.Monitor(self,can)
-	self.EndJoint, self.IsSplit = self.EndJoint.AppendCans(can)
-	//self.par.SplitCache <- self
+	self.EndJoint, self.IsSplit = self.EndJoint.Append(can)
+	//fmt.Println(len(self.par.SplitCache))
 	if self.IsSplit {
 		if self.LastCache == nil {
 			j :=0
@@ -201,10 +217,11 @@ func (self *Cache) UpdateJoint(can *request.Candles) ( bool) {
 				}
 				jo.Cut()
 				self.BeginJoint = jo
-				fmt.Println("end cache",self.Name,time.Unix(jo.Cans[0].Time,0))
+				//fmt.Println("end cache",self.Name,time.Unix(jo.Cans[0].Time,0))
 				return true
 			})
 		} else {
+			//self.par.SplitCache <- self
 			if len(self.LastCache.BeginJoint.Cans) > 0 {
 				endTime := self.LastCache.BeginJoint.Cans[0].Time
 				self.BeginJoint.ReadNext(func(jo *Joint) bool {
@@ -214,7 +231,7 @@ func (self *Cache) UpdateJoint(can *request.Candles) ( bool) {
 					if self.BeginJoint != jo {
 						self.BeginJoint = jo
 						jo.Cut()
-						fmt.Println(self.Name,self.BeginJoint.Cans[0].Time,endTime)
+						//fmt.Println(self.Name,self.BeginJoint.Cans[0].Time,endTime)
 					}
 					return true
 				})

@@ -29,7 +29,7 @@ func (s *server) StartInstrument(ctx context.Context, InsName *pb.InstrumentSimp
 }
 func (s *server) GetLastTime(InsName *pb.InstrumentSimple, stream pb.Greeter_GetLastTimeServer) error {
 	for _, inc := range replay.InsCaches {
-		if inc.Name == InsName.Name {
+		if inc.Ins.Name == InsName.Name {
 			log.Println(InsName, "lastTime")
 
 			ser := new(replay.ServerChan)
@@ -62,7 +62,7 @@ func (s *server) ListInstrument(re *pb.Request, stream pb.Greeter_ListInstrument
 
 	instr := request.ActiveAccount.Instruments
 	for _, inc := range replay.InsCaches {
-		instr[inc.Name].Online = true
+		instr[inc.Ins.Name].Online = true
 	}
 
 	for _, ins := range instr {

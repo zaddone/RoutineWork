@@ -38,6 +38,54 @@ func (self *Joint) ReadLast(hand func(jo *Joint) bool) {
 	return
 
 }
+func (self *Joint) Read(begin int,f func(can *request.Candles) bool) {
+	le:= len(self.Cans)
+	for i:=begin;i<le;i++ {
+		if f(self.Cans[i]) {
+			return
+		}
+	}
+	if self.Next != nil {
+		self.Next.Read(0,f)
+	}
+}
+func (self *Joint)Find(can *request.Candles) (*Joint,int) {
+	le := len(self.Cans)
+	if le == 0 {
+		if self.Next == nil {
+			panic("self.Next == nil")
+		}
+		return self.Next.Find(can)
+	}
+	if can.Time < self.Cans[0].Time {
+		panic("c < 0")
+	}
+	end:= le-1
+	if can.Time > self.Cans[end].Time {
+		return self.Next.Find(can)
+	}
+	return self,self.binaryChop(0,end,can)
+
+
+}
+func (self *Joint) binaryChop(b,e int,can *request.Candles ) int{
+	f := e-b
+	if f<0 {
+		return f
+	}
+	index := b + f/2
+	_time :=self.Cans[index].Time
+	if _time > can.Time {
+		return self.binaryChop(b,index-1,can)
+	}else if _time < can.Time {
+		return self.binaryChop(index+1,e,can)
+	}else{
+		if can!= self.Cans[index] {
+			panic("is not same")
+		}
+		return index
+	}
+}
 func (self *Joint)Cut(){
 	if self.Last != nil {
 		self.Last.Next= nil
@@ -86,18 +134,19 @@ func (self *Joint) merge() {
 	if LastC == nil {
 		return
 	}
-	LastC.Next = nil
+	//LastC.Next = nil
 	self.Last = LastC.Last
 	if self.Last != nil {
-		LastC.Last = nil
+		//LastC.Last = nil
 		self.Last.Next = self
 	}
 	self.Cans = append(LastC.Cans, self.Cans...)
+	LastC.Cans = nil
 	self.SumLong += LastC.SumLong
 
 }
 
-func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
+func (self *Joint) Append(can *request.Candles) (jo *Joint, update bool) {
 
 	jo = self
 	update = false
@@ -112,6 +161,7 @@ func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 		return
 	}
 
+	self.MaxDiff = 0
 	//tmpDiff := canVal - jo.Cans[0].GetMidAverage()
 	if ((canVal - jo.Cans[0].GetMidAverage()) > 0) != (self.Diff > 0) {
 		jo.merge()
@@ -121,7 +171,6 @@ func (self *Joint) AppendCans(can *request.Candles) (jo *Joint, update bool) {
 	ave := self.GetLongAve()
 	var dif float64 = 0
 	var maxId int = 0
-	self.MaxDiff = 0
 	for i := 1; i < le; i++ {
 		dif = canVal - self.Cans[i].GetMidAverage()
 		if (dif > 0) != (self.Diff > 0) {

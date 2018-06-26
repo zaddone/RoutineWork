@@ -11,9 +11,14 @@ var (
 	InsCaches []*InstrumentCache
 	InsName   = flag.String("n", "EUR_JPY", "INS NAME")
 	SignalGroup []Signal = nil
+	SignalBox [6]float64
 )
+//type SignalData struct {
+//	InsCache *InstrumentCache
+//	Ca  *Cache
+//}
 type Signal interface{
-	Check(insCache *InstrumentCache)
+	Check(sd *InstrumentCache)
 	Show()
 }
 
@@ -26,6 +31,10 @@ func init() {
 	for i, na := range nas {
 		//InsC = new(InstrumentCache)
 		InsC = NewInstrumentCache(na)
+		if InsC == nil {
+			log.Println(na,"Not fount")
+			continue
+		}
 		InsCaches[i] = InsC
 		//InsC.Init(na)
 		InsC.Run()
@@ -34,11 +43,15 @@ func init() {
 
 func Start(Ins string) bool {
 	for _, insc := range InsCaches {
-		if insc.Name == Ins {
+		if insc.Ins.Name == Ins {
 			return false
 		}
 	}
 	InsC := NewInstrumentCache(Ins)
+	if InsC == nil {
+		log.Println(Ins,"Not fount")
+		return false
+	}
 	//InsC.Init(Ins)
 	InsCaches = append(InsCaches, InsC)
 	InsC.Run()

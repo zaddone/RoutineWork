@@ -5,164 +5,239 @@ import(
 	"fmt"
 	"sync"
 	"math"
+	//"time"
+	//"strings"
 )
 func init(){
-	replay.SignalGroup = append(replay.SignalGroup, NewSignalAna())
+	replay.SignalGroup = append(replay.SignalGroup, NewAna())
 }
-type SignalMsg struct {
+type Msg struct {
 
-	InsName string
+	//InsName string
 
-	timeOut int64
-	valOut float64
-	direction bool
-	//SignalDate
+	joint *replay.Joint
 	can *request.Candles
+	//takeProfit *request.Candles
+	//stopLosses *request.Candles
+	tp float64
+	sl float64
+	scale int64
+	isSend bool
 
-	last *SignalMsg
-
-}
-func (self *SignalMsg) check(Can *request.Candles) bool{
-
-	//val  := da.Can.GetMidAverage()
-	if Can.Time - self.can.Time >self.timeOut {
-		return true
-	}
-	diff := Can.GetMidAverage() - self.can.GetMidAverage()
-	if math.Abs(diff) > self.valOut {
-		return true
-	}
-	return false
+	last *Msg
 
 }
-type SignalAna struct{
+
+func (self *Msg) test(pip float64) ( out bool) {
+
+	joint,index:= self.joint.Find(self.can)
+	if index <0 {
+		panic("index")
+	}
+	val:=self.can.GetMidAverage()
+	if joint == self.joint ||
+	(((val - joint.Cans[0].GetMidAverage())>0) ==(self.tp>0)) {
+		if joint.Next != nil &&
+		joint.Next.Next != nil &&
+		joint.Next.Next.Next != nil {
+			Ncans:=joint.Next.Next.Next.Cans
+			diff := Ncans[len(Ncans)-1].GetMidAverage() - val
+			if (diff>0)==(self.tp>0) {
+				replay.SignalBox[0]++
+				replay.SignalBox[2]+=(math.Abs(diff) - pip)
+				return true
+			}else if (diff>0)==(self.sl>0) {
+				replay.SignalBox[1]++
+				replay.SignalBox[2]-=(math.Abs(diff) + pip)
+				return true
+			}
+		}
+	}else{
+		if joint.Next != nil &&
+		joint.Next.Next != nil &&
+		joint.Next.Next.Next != nil &&
+		joint.Next.Next.Next.Next != nil {
+			Ncans:=joint.Next.Next.Next.Next.Cans
+			diff := Ncans[len(Ncans)-1].GetMidAverage() - val
+			if (diff>0)==(self.tp>0) {
+				replay.SignalBox[0]++
+				replay.SignalBox[2]+=(math.Abs(diff) - pip)
+				return true
+			}else if (diff>0)==(self.sl>0) {
+				replay.SignalBox[1]++
+				replay.SignalBox[2]-=(math.Abs(diff)+ pip)
+				return true
+			}
+
+		}
+	}
+	//tp:=self.takeProfit.GetMidAverage() - val
+	//sl:=self.stopLosses.GetMidAverage() - val
+	var diff float64
+	joint.Read(index+1,func(can *request.Candles) bool{
+		if can.Time < self.can.Time {
+			panic("can time")
+		}
+		diff = can.GetMidAverage() - val
+		if ((diff>0)==(self.tp>0)) && (math.Abs(diff)>math.Abs(self.tp)) {
+			replay.SignalBox[0]++
+			replay.SignalBox[2]+=(math.Abs(diff) - pip)
+			//fmt.Println(self.tp,self.sl,diff,"tp")
+			out = true
+			return true
+		}else if ((diff>0)==(self.sl>0)) && (math.Abs(diff)>math.Abs(self.sl)) {
+			out = true
+			//fmt.Println(self.tp,self.sl,diff,"sl")
+			replay.SignalBox[1]++
+			replay.SignalBox[2]-=(math.Abs(diff)+pip)
+			return true
+		}
+		return false
+
+	})
+
+	return out
+}
+func (self *Msg) check (s *Msg) {
+	if self.joint.Next == nil {
+		s.last = self
+		s = self
+	}
+	last := self.last
+	if last != nil {
+		self.last = nil
+		last.check(s)
+	}
+
+}
+func (self *Msg) checkSignal( num *int) {
+
+	if (self.last == nil){
+		return
+	}
+
+	if (self.last.joint.MaxDiff !=0) ||
+	((self.joint.Diff>0) != (self.last.joint.Diff>0)) {
+		*num = 0
+		return
+	}
+	*num++
+	self.last.checkSignal(num)
+
+}
+type Signal struct {
+	Msg *Msg
+	Send chan *Msg
+	InsCache *replay.InstrumentCache
+}
+func (self *Signal) readSend( f func(*Msg,float64) bool){
+	le := len(self.Send)
+	for i:=0;i<le;i++{
+		mg:=<-self.Send
+		//if !f(mg,self.InsCache.Ins.PipDiff()){
+		if !f(mg,0){
+			self.Send<-mg
+		}
+	}
+}
+
+type Ana struct{
 	//msg
-	tag int64
-	msgMap map[string]*SignalMsg
+	msgMap map[string]*Signal
 	sync.Mutex
 }
-func NewSignalAna() *SignalAna {
-	return &SignalAna{
-		msgMap:map[string]*SignalMsg{}}
+func NewAna() *Ana {
+	return &Ana{
+		msgMap:map[string]*Signal{}}
 }
-func (self *SignalAna) add(signalmsg *SignalMsg){
+func (self *Ana) add(msg *Msg,Ins *replay.InstrumentCache){
 
-	self.Lock()
-	defer self.Unlock()
-
-	signalmsg.last = self.msgMap[signalmsg.InsName]
-	if signalmsg.last != nil {
-		if signalmsg.last.direction != signalmsg.direction {
-			signalmsg.last = nil
-		}else{
-			if signalmsg.last.check(signalmsg.can) {
-				signalmsg.last = nil
-			}else{
-				
+	key := Ins.Ins.Name
+	sig := self.msgMap[key]
+	if sig == nil  {
+		self.Lock()
+		self.msgMap[key] = &Signal{
+			Msg:msg,
+			InsCache:Ins,
+			Send:make(chan *Msg,100)}
+		self.Unlock()
+		return
+	}
+	sig.Msg.check(msg)
+	sig.Msg = msg
+	if msg.joint.Last != nil &&
+	msg.joint.Last.Last != nil &&
+	(math.Abs(msg.joint.Last.Last.Diff)/math.Abs(msg.joint.Diff)) > 3 {
+		var num int = 0
+		msg.checkSignal(&num)
+		if num >0 {
+			select{
+			case sig.Send <-msg:
+				msg.isSend = true
+			default:
 			}
 		}
 	}
-	self.msgMap[signalmsg.InsName] = signalmsg
+	//self.msgMap[key] = signalmsg
 
 }
-func (self *SignalAna) Check(insCache *replay.InstrumentCache){
+func (self *Ana) Check(InsCache *replay.InstrumentCache){
+	f := func(Cache *replay.Cache,CacheId int) {
+		dif :=(Cache.EndJoint.Diff >0)
+		Cache1 := InsCache.CacheList[CacheId+1]
+		if (Cache1.EndJoint.MaxDiff != 0){
+			return
+		}
+		if (dif != (Cache1.EndJoint.Diff>0)) {
+			return
+		}
+		Cache2 := InsCache.CacheList[CacheId+2]
+		if (Cache2.EndJoint.MaxDiff != 0){
+			return
+		}
+		if (dif != (Cache2.EndJoint.Diff>0)) {
+			return
+		}
 
-	var Cache *replay.Cache = nil
-	var CacheId int
-	for i,ca := range insCache.CacheList {
-		if ca.IsUpdate && ca.IsSplit {
-			Cache = ca
-			CacheId = i
-			break
+		sl := Cache1.EndJoint.Cans[0].GetMidAverage() - Cache.LastCan.GetMidAverage()
+		if math.Abs(sl) < Cache1.EndJoint.GetLongAve(){
+			return
+		}
+		self.add(&Msg{
+			tp:-sl,
+			sl:sl,
+			joint:Cache.EndJoint,
+			isSend:false,
+			scale: Cache.Scale,
+			can:Cache.LastCan},InsCache)
+		//fmt.Println(sl,-sl)
+	}
+
+	sig := self.msgMap[InsCache.Ins.Name]
+	s := func(Cache *replay.Cache) {
+		if sig == nil {
+			return
+		}
+		sig.readSend(func(mg *Msg,pip float64) bool{
+			//fmt.Println(pip)
+			if mg.scale == Cache.Scale &&
+			mg.test(pip) {
+				return true
+			}else{
+				return false
+			}
+		})
+	}
+
+	for i := len(InsCache.CacheList)-3;i>=0;i--{
+		tmpca:=InsCache.CacheList[i]
+		if tmpca.IsSplit {
+			s(tmpca)
+			f(tmpca,i)
 		}
 	}
-	if Cache == nil {
-		return
-	}
-	if Cache.LastCache == nil {
-		return
-	}
-	//test
-	if (math.Abs(Cache.EndJoint.Last.Diff)/math.Abs(Cache.EndJoint.Diff)) < 2{
-		return
-	}
-	HiId := CacheId+1
-	if HiId >= len(insCache.CacheList) {
-		return
-	}
-
-	Cache1 := insCache.CacheList[HiId]
-	if Cache1.EndJoint.MaxDiff != 0 {
-		return
-	}
-	if ((Cache.EndJoint.Diff >0) != (Cache1.EndJoint.Diff>0)) {
-		return
-	}
-
-
-	/**
-	self.lastData.InsCache.CacheList[0].LastCan
-	if !da.NowCache.IsSplit {
-		return
-	}
-	if da.NowCache.LastCache == nil {
-		return
-	}
-
-	JointB := da.NowCache.EndJoint.Last
-	if  JointB == nil {
-		return
-	}
-	JointC := JointB.Last
-	if  JointC == nil {
-		return
-	}
-
-	//   condition 1
-	DiffB := math.Abs(JointB.Diff)
-	DiffC := math.Abs(JointC.Diff)
-	if (DiffC > DiffB) && ((DiffC - DiffB) > da.NowCache.EndJoint.GetLongAve()){
-		return
-	}
-	//
-
-	HightCa := da.InsCache.GetHightCache(da.NowCache)
-	if HightCa == nil {
-		return
-	}
-	//   condition 2
-	f :=(da.NowCache.EndJoint.Diff >0)
-	if f != (HightCa.EndJoint.Diff>0) {
-		return
-	}
-	//
-
-	//   condition 3
-	absDiff := math.Abs(HightCa.EndJoint.Diff)
-	ave := HightCa.EndJoint.GetLongAve()
-
-	if absDiff < ave {
-		return
-	}
-	if HigitCa.EndJoint.Last == nil {
-		return
-	}
-	valOut := math.Abs(HigitCa.EndJoint.Last.Diff) - absDiff
-	if valOut < absDiff {
-		return
-	}
-	//
-
-	self.add(&SignalMsg{
-		InsName:da.InsCache.Name,
-		timeOut:da.Can.Time - JointB.Cans[0].Time,
-		valOut:valOut,
-		direction:f,
-		can:da.Can})
-
-	**/
 
 }
-func (self *SignalAna) Show(){
+func (self *Ana) Show(){
 	fmt.Println("Hello world")
 }

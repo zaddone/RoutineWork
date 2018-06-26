@@ -9,6 +9,7 @@ import (
 	"sync"
 	//"time"
 	//"strings"
+	//"fmt"
 )
 
 
@@ -89,41 +90,33 @@ func (self *ServerChanMap) Add(k int,Sc *ServerChan){
 type InstrumentCache struct {
 	GranularityMap map[string]int64
 	CacheList      []*Cache
-	Name           string
+	//Name           string
 	ServerChanMap  ServerChanMap
 	w		sync.WaitGroup
+	Ins		*request.Instrument
 	//SplitCache     chan *Cache
 	//signal Signal
 }
 
 func NewInstrumentCache(Instr string) *InstrumentCache {
+
+	Ins := request.ActiveAccount.Instruments[Instr]
+	if Ins == nil {
+		return nil
+	}
 	var inc InstrumentCache
-	inc.Init(Instr)
+	inc.Init(Ins)
 	//inc.signal = SignalSys
 	return &inc
 }
 func (self *InstrumentCache) Signal(){
 
-	/**
-	le:= len(self.SplitCache)
-	if le == 0 {
-		return
-	}
-
-	var caches []*Cache = make([]*Cache,le)
-	for i:=0;i<le;i++ {
-		caches[i] = <-self.SplitCache
-		fmt.Println(caches[i].Name,time.Unix(caches[i].LastCan.Time,0))
-	}
-	**/
 	if SignalGroup == nil  {
 		return
 	}
 	for _,si := range SignalGroup {
 		si.Check(self)
 	}
-
-
 
 }
 func (self *InstrumentCache) Monitor(ca *Cache,can *request.Candles) {
@@ -132,18 +125,6 @@ func (self *InstrumentCache) Monitor(ca *Cache,can *request.Candles) {
 		Scale: ca.Scale,
 		Time:  can.Time,
 		Name:  ca.Name})
-
-	//if SignalGroup != nil {
-	//	//SignalSys.Show()
-	//	sigData := &SignalData{InsCache:self,
-	//				Ty:ty,
-	//				NowCache:ca,
-	//				Can:can}
-
-	//	for _,si := range SignalGroup {
-	//		si.Check(sigData)
-	//	}
-	//}
 
 }
 
@@ -156,11 +137,12 @@ func (self *InstrumentCache) GetHightCache(ca *Cache) *Cache {
 	return nil
 }
 
-func (self *InstrumentCache) Init(Instr string) {
+func (self *InstrumentCache) Init(Ins *request.Instrument) {
 
 	self.ServerChanMap.Init()
+	self.Ins=  Ins
 	//self.ServerChan = make(map[int]*ServerChan)
-	self.Name = Instr
+	//self.Name = Instr
 	self.GranularityMap = map[string]int64{
 		"S5"  : 5,
 		"S10" : 10,
@@ -187,7 +169,7 @@ func (self *InstrumentCache) Init(Instr string) {
 	for k, v := range self.GranularityMap {
 		ca := NewCache(k, v, self)
 		//ca.Id = i
-		go ca.Load(Instr, filepath.Join(Instr, ca.Name))
+		go ca.Load(self.Ins.Name, filepath.Join(self.Ins.Name, ca.Name))
 		self.CacheList = append(self.CacheList, ca)
 		self.sortCacheList(i)
 		i++
@@ -197,6 +179,7 @@ func (self *InstrumentCache) Init(Instr string) {
 	for _, ca := range self.CacheList[:le] {
 		ca.LastCache = lastCache
 	}
+	//self.SplitCache = make(chan *Cache,len(self.CacheList))
 	//self.SplitCache = make(chan *Cache,le)
 
 }
@@ -215,9 +198,12 @@ func (self *InstrumentCache) sortCacheList(i int) {
 func (self *InstrumentCache) Run() {
 
 	//endId := len(self.CacheList) - 1
-	for _, _ca := range self.CacheList[1:] {
-		go _ca.SyncRun(_ca.UpdateJoint)
+	cas:=self.CacheList[1:]
+	for _, _ca := range cas {
+		go func(ca *Cache){
+			ca.SyncRun(ca.UpdateJoint)
+		}(_ca)
 	}
-	go self.CacheList[0].Sensor(self.CacheList[1:])
+	go self.CacheList[0].Sensor(cas)
 
 }

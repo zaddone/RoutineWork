@@ -13,7 +13,7 @@ import (
 	//"flag"
 	"path/filepath"
 	"time"
-
+	"math"
 	"strconv"
 	"strings"
 	//	"bytes"
@@ -142,8 +142,8 @@ func SetActiveAccount() {
 
 }
 
-func InitAccounts(isU bool) (err error) {
-	if !isU {
+func InitAccounts(update bool) (err error) {
+	if !update {
 		err = ReadAccounts()
 		if err == nil {
 			return nil
@@ -301,6 +301,10 @@ func (self *Account) GetAccountPath() string {
 	return fmt.Sprintf("%s/accounts/%s", Conf.Host, self.Id)
 }
 func (self *Account) SetInstruments() error {
+	if self.Instruments != nil {
+		//fmt.Println(self.Instruments)
+		return nil
+	}
 	path := self.GetAccountPath()
 	path += "/instruments"
 	da := make(map[string]interface{})
@@ -343,6 +347,14 @@ type Instrument struct {
 	TradeUnitsPrecision float64
 	Type                string
 	Online              bool
+	pipDiff  float64
+}
+func (self *Instrument) PipDiff() float64 {
+	if self.pipDiff == 0 {
+		return math.Pow10(-int(self.DisplayPrecision))*(-self.PipLocation)*2
+	}else{
+		return self.pipDiff
+	}
 }
 
 func (self *Instrument) Init(tmp map[string]interface{}) (err error) {
