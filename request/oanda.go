@@ -2,6 +2,7 @@ package request
 
 import (
 	"fmt"
+	//"log"
 	"os"
 	//	"math"
 	"io/ioutil"
@@ -18,6 +19,7 @@ import (
 	"strings"
 	//	"bytes"
 	"io"
+	"github.com/zaddone/RoutineWork/config"
 )
 
 var (
@@ -26,20 +28,18 @@ var (
 	Header   http.Header
 	//Instr    *Instrument
 	ActiveAccount *Account
-	Conf *Config
-
 )
 
 func init() {
 	//flag.Parse()
-	Conf = NewConfig()
+	//Conf = NewConfig()
 	Header = make(http.Header)
-	Header.Add("Authorization", fmt.Sprintf("Bearer %s", Conf.Authorization))
+	Header.Add("Authorization", fmt.Sprintf("Bearer %s", config.Conf.Authorization))
 	Header.Add("Connection", "Keep-Alive")
 	Header.Add("Accept-Datetime-Format", "UNIX")
 	Header.Add("Content-type", "application/json")
 
-	if Conf.Proxy == "" {
+	if config.Conf.Proxy == "" {
 		Client = new(http.Client)
 	} else {
 		panic(0)
@@ -95,6 +95,24 @@ func ClientPost(path string, val io.Reader, da interface{}) error {
 
 }
 
+func ClientDOStream(path string) (io.ReadCloser,error) {
+
+	Req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return nil,err
+	}
+	Req.Header = Header
+	res, err := Client.Do(Req)
+	if err != nil {
+		return nil,err
+	}
+	if res.StatusCode != 200 {
+		res.Body.Close()
+		return nil,fmt.Errorf("status code %d %s", res.StatusCode, path)
+	}
+	return res.Body,nil
+
+}
 func ClientDO(path string, da interface{}) error {
 	Req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
@@ -124,7 +142,7 @@ func SetActiveAccount() {
 	//var Nacc *Account
 	//ActiveAccount = nil
 	for _, acc := range Accounts {
-		if acc.Id == Conf.Account_ID {
+		if acc.Id == config.Conf.Account_ID {
 			ActiveAccount = acc
 			ActiveAccount.SetInstruments()
 			return
@@ -150,7 +168,7 @@ func InitAccounts(update bool) (err error) {
 		}
 	}
 	da := make(map[string][]*Account)
-	err = ClientDO(Conf.Host+"/accounts", &da)
+	err = ClientDO(config.Conf.Host+"/accounts", &da)
 	if err != nil {
 		return err
 	}
@@ -163,7 +181,7 @@ func InitAccounts(update bool) (err error) {
 
 }
 func SaveAccounts() error {
-	f, err := os.OpenFile(Conf.LogFile, os.O_CREATE|os.O_TRUNC|os.O_RDWR|os.O_SYNC, 0777)
+	f, err := os.OpenFile(config.Conf.LogFile, os.O_CREATE|os.O_TRUNC|os.O_RDWR|os.O_SYNC, 0777)
 	if err != nil {
 		return err
 	}
@@ -179,12 +197,12 @@ func SaveAccounts() error {
 	return nil
 }
 func ReadAccounts() error {
-	fi, err := os.Stat(Conf.LogFile)
+	fi, err := os.Stat(config.Conf.LogFile)
 	if err != nil {
 		return err
 	}
 	data := make([]byte, fi.Size())
-	f, err := os.Open(Conf.LogFile)
+	f, err := os.Open(config.Conf.LogFile)
 	if err != nil {
 		return err
 	}
@@ -260,7 +278,7 @@ func Down(name string, from, to int64, gr int64, gran string, Handle func(*Candl
 }
 func GetCandlesHandle(Ins_name, granularity string, from, count int64, f func(c interface{}) error) (err error) {
 
-	path := fmt.Sprintf("%s/instruments/%s/candles?", Conf.Host, Ins_name)
+	path := fmt.Sprintf("%s/instruments/%s/candles?", config.Conf.Host, Ins_name)
 	uv := url.Values{}
 	uv.Add("granularity", granularity)
 	uv.Add("price", "M")
@@ -297,8 +315,11 @@ type Account struct {
 	Tags        []string               `json:"tags"`
 	Instruments map[string]*Instrument `json:"instruments"`
 }
+func (self *Account) GetAccountPathStream() string {
+	return fmt.Sprintf("%s/accounts/%s", config.Conf.StreamHost, self.Id)
+}
 func (self *Account) GetAccountPath() string {
-	return fmt.Sprintf("%s/accounts/%s", Conf.Host, self.Id)
+	return fmt.Sprintf("%s/accounts/%s", config.Conf.Host, self.Id)
 }
 func (self *Account) SetInstruments() error {
 	if self.Instruments != nil {
@@ -459,6 +480,12 @@ func (self *Candles) Load(str string) (err error) {
 
 func (self *Candles) String() string {
 	return fmt.Sprintf("%.5f %.5f %.5f %.5f %d %.5f\r\n", self.Mid[0], self.Mid[1], self.Mid[2], self.Mid[3], self.Time, self.Volume)
+}
+func (self *Candles) CheckSection( val float64 ) bool {
+	if val > self.Mid[2] || val < self.Mid[3] {
+		return false
+	}
+	return true
 }
 func (self *Candles) Init(tmp map[string]interface{}) (err error) {
 	Mid := tmp["mid"].(map[string]interface{})

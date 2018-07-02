@@ -16,6 +16,7 @@ type Config struct {
 	LogFile string
 	Host string
 	BEGINTIME string
+	Port string
 }
 func (self *Config) Save() {
 
@@ -43,6 +44,7 @@ func NewConfig()  *Config {
 		c.LogFile = "LogInfo.log"
 		c.Host = "https://api-fxpractice.oanda.com/v3"
 		c.BEGINTIME = "2009-01-01T00:00:00"
+		c.Port=":50051"
 		c.Save()
 	}else{
 		if _,err := toml.DecodeFile(FileName,&c);err != nil {

@@ -2,13 +2,15 @@ package replay
 
 import (
 	"github.com/zaddone/RoutineWork/request"
+	"github.com/zaddone/RoutineWork/config"
 	"bufio"
 	"fmt"
-	//	"math"
+	//"math"
 	"os"
 	"path/filepath"
-	//"sync"
+	//"strconv"
 	"time"
+	//"strings"
 )
 
 //var (
@@ -74,6 +76,9 @@ type Cache struct {
 	IsSplit bool
 	//IsUpdate bool
 }
+func (self *Cache)GetInsName() string {
+	return self.par.Ins.Name
+}
 
 func NewCache(name string, scale int64, p *InstrumentCache) (ca *Cache) {
 
@@ -116,7 +121,7 @@ func (self *Cache) Load(name, path string) {
 	}
 	var begin int64
 	if cf == nil {
-		beginT, err := time.Parse("2006-01-02T15:04:05", request.Conf.BEGINTIME)
+		beginT, err := time.Parse("2006-01-02T15:04:05", config.Conf.BEGINTIME)
 		if err != nil {
 			panic(err)
 		}
@@ -165,15 +170,30 @@ func (self *Cache) Sensor(cas []*Cache) {
 		self.par.w.Wait()
 
 		day:= time.Unix(endTime, 0)
-		d := day.Format("2006-01")
+		d := day.Format("2006-01-02")
 		if d != date {
 			fmt.Printf("%s %.2f---------------------\r\n",date,SignalBox)
 			date = d
 			SignalBox=[6]float64{0,0,0,0,0,0}
 		}
+		//if self.par.Price.Time != "" {
+		//	ti := strings.Split(string(self.par.Price.Time),".")
+		//	sec,err := strconv.Atoi(ti[0])
+		//	if err != nil {
+		//		fmt.Println(err)
+		//	}
+		//	nsec,err := strconv.Atoi(ti[1])
+		//	if err != nil {
+		//		fmt.Println(err)
+		//	}
+		//	for i,b := range self.par.Price.Bids {
+		//		fmt.Println(i,b.Price.GetPrice(),self.par.Price.CloseoutBid)
+		//	}
+		//	fmt.Printf("%s %.2f %s %d %d\r", day , SignalBox[:3],self.par.Price.Bids,int64(sec),int64(nsec))
+		//}else{
 		fmt.Printf("%s %.2f\r", day , SignalBox)
+		//}
 		self.par.Signal()
-
 		//if cas[0].LastCache != nil {
 		//	fmt.Printf("%s %s\r", time.Unix(endTime, 0),time.Unix(cas[0].LastCan.Time,0))
 		//}else{

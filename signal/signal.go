@@ -1,12 +1,16 @@
 package signal
+
 import(
 	"github.com/zaddone/RoutineWork/replay"
 	"github.com/zaddone/RoutineWork/request"
+	"github.com/zaddone/RoutineWork/config"
 	"fmt"
 	"sync"
 	"math"
+	"log"
+	"strconv"
 	//"time"
-	//"strings"
+	"strings"
 )
 func init(){
 	replay.SignalGroup = append(replay.SignalGroup, NewAna())
@@ -14,7 +18,6 @@ func init(){
 type Msg struct {
 
 	//InsName string
-
 	joint *replay.Joint
 	can *request.Candles
 	//takeProfit *request.Candles
@@ -23,81 +26,106 @@ type Msg struct {
 	sl float64
 	scale int64
 	isSend bool
-
 	last *Msg
+	mr *request.OrderResponse
+
+}
+func (self *Msg) GetTime() int64 {
+	return self.can.Time + self.scale + self.scale
+}
+func (self *Msg) Send(InsName string){
+	return
+	mr,err := request.HandleOrder(InsName,config.Conf.Units,0,self.tp,self.sl)
+	if err != nil {
+		log.Println(err)
+	}else{
+		self.mr = &mr
+		log.Println(self.mr)
+	}
+}
+func (self *Msg) Close(diff float64) {
+
+	//diff := Ins.CacheList[0].LastCan.GetMidAverage() - self.can.GetMidAverage()
+	//diff := LastCanVal - self.can.GetMidAverage()
+	if (diff>0) == (self.tp>0) {
+		replay.SignalBox[0]++
+		replay.SignalBox[2]+=math.Abs(diff)
+	}else{
+		replay.SignalBox[1]++
+		replay.SignalBox[2]-=math.Abs(diff)
+	}
 
 }
 
-func (self *Msg) test(pip float64) ( out bool) {
+func (self *Msg) test(Cache *replay.Cache) ( out bool) {
+
+	val:=self.can.GetMidAverage()
+	var diff float64
+	out = false
 
 	joint,index:= self.joint.Find(self.can)
 	if index <0 {
 		panic("index")
 	}
-	val:=self.can.GetMidAverage()
-	if joint == self.joint ||
-	(((val - joint.Cans[0].GetMidAverage())>0) ==(self.tp>0)) {
-		if joint.Next != nil &&
-		joint.Next.Next != nil &&
-		joint.Next.Next.Next != nil {
-			Ncans:=joint.Next.Next.Next.Cans
-			diff := Ncans[len(Ncans)-1].GetMidAverage() - val
-			if (diff>0)==(self.tp>0) {
-				replay.SignalBox[0]++
-				replay.SignalBox[2]+=(math.Abs(diff) - pip)
-				return true
-			}else if (diff>0)==(self.sl>0) {
-				replay.SignalBox[1]++
-				replay.SignalBox[2]-=(math.Abs(diff) + pip)
-				return true
-			}
-		}
-	}else{
-		if joint.Next != nil &&
-		joint.Next.Next != nil &&
-		joint.Next.Next.Next != nil &&
-		joint.Next.Next.Next.Next != nil {
-			Ncans:=joint.Next.Next.Next.Next.Cans
-			diff := Ncans[len(Ncans)-1].GetMidAverage() - val
-			if (diff>0)==(self.tp>0) {
-				replay.SignalBox[0]++
-				replay.SignalBox[2]+=(math.Abs(diff) - pip)
-				return true
-			}else if (diff>0)==(self.sl>0) {
-				replay.SignalBox[1]++
-				replay.SignalBox[2]-=(math.Abs(diff)+ pip)
-				return true
-			}
-
-		}
-	}
-	//tp:=self.takeProfit.GetMidAverage() - val
-	//sl:=self.stopLosses.GetMidAverage() - val
-	var diff float64
+	//lastCan := self.can
+	//var tdiff int64
 	joint.Read(index+1,func(can *request.Candles) bool{
+
+		//tdiff = (can.Time - lastCan.Time)
+		//if tdiff > self.scale*10 {
+		//	fmt.Println(self.scale,tdiff,"---------------------------")
+		//}
+		//lastCan = can
+
 		if can.Time < self.can.Time {
 			panic("can time")
 		}
 		diff = can.GetMidAverage() - val
-		if ((diff>0)==(self.tp>0)) && (math.Abs(diff)>math.Abs(self.tp)) {
-			replay.SignalBox[0]++
-			replay.SignalBox[2]+=(math.Abs(diff) - pip)
-			//fmt.Println(self.tp,self.sl,diff,"tp")
+		//if ((diff>0)==(self.tp>0)) && (math.Abs(diff)>math.Abs(self.tp)) {
+		//	replay.SignalBox[0]++
+		//	replay.SignalBox[2]+=math.Abs(diff)
+		//	out = true
+		//	return true
+		//}else if ((diff>0)==(self.sl>0)) && (math.Abs(diff)>math.Abs(self.sl)) {
+		if ((diff>0)==(self.sl>0)) && (math.Abs(diff)>math.Abs(self.sl)) {
 			out = true
-			return true
-		}else if ((diff>0)==(self.sl>0)) && (math.Abs(diff)>math.Abs(self.sl)) {
-			out = true
-			//fmt.Println(self.tp,self.sl,diff,"sl")
 			replay.SignalBox[1]++
-			replay.SignalBox[2]-=(math.Abs(diff)+pip)
+			replay.SignalBox[2]-= math.Abs(diff)
 			return true
 		}
 		return false
 
 	})
+	if !out {
+		tp:=(self.tp>0)
+		if  tp != (Cache.EndJoint.Diff>0){
+			diff = (Cache.LastCan.GetMidAverage() - val)
+			if tp == (diff>0) {
+				replay.SignalBox[0]++
+				replay.SignalBox[2]+= math.Abs(diff)
+				out = true
+				//return true
+				if self.mr != nil {
+					v,err := request.ClosePosition(Cache.GetInsName(),fmt.Sprintf("%d",config.Conf.Units))
+					if err != nil {
+						log.Println(err)
+					}else{
+						if v>0 {
+							replay.SignalBox[4]++
+						}else{
+							replay.SignalBox[5]++
+						}
+						replay.SignalBox[3]+=v
+					}
+				}
+			}
+		}
+	}
 
 	return out
+
 }
+
 func (self *Msg) check (s *Msg) {
 	if self.joint.Next == nil {
 		s.last = self
@@ -110,35 +138,137 @@ func (self *Msg) check (s *Msg) {
 	}
 
 }
-func (self *Msg) checkSignal( num *int) {
+func (self *Msg) checkSignal( num *int,msg *Msg) {
 
-	if (self.last == nil){
-		return
+	if self.scale >= msg.scale {
+		//if (self.joint.MaxDiff !=0) ||
+		if ((msg.joint.Diff>0) != (self.joint.Diff>0)) {
+			*num = 0
+			return
+		}
+		*num++
 	}
-
-	if (self.last.joint.MaxDiff !=0) ||
-	((self.joint.Diff>0) != (self.last.joint.Diff>0)) {
-		*num = 0
-		return
+	if self.last != nil {
+		self.last.checkSignal(num,msg)
 	}
-	*num++
-	self.last.checkSignal(num)
 
 }
 type Signal struct {
 	Msg *Msg
-	Send chan *Msg
+	Send []*Msg
 	InsCache *replay.InstrumentCache
 }
-func (self *Signal) readSend( f func(*Msg,float64) bool){
-	le := len(self.Send)
-	for i:=0;i<le;i++{
-		mg:=<-self.Send
-		//if !f(mg,self.InsCache.Ins.PipDiff()){
-		if !f(mg,0){
-			self.Send<-mg
+func (self *Signal) CheckMsg(msg *Msg) bool {
+
+	self.Msg.check(msg)
+	self.Msg = msg
+	if math.Abs(msg.sl)<self.InsCache.Ins.MinimumTrailingStopDistance*1.5 {
+		return false
+	}
+
+	if (len(self.Send) >0) {
+		if (self.Send[0].tp>0) != (msg.tp>0) {
+			return false
+		}
+	}else{
+		if msg.last == nil {
+			return false
+		}
+		var num int = 0
+		msg.last.checkSignal(&num,msg)
+		if num == 0 {
+			return false
 		}
 	}
+
+	msg.isSend = true
+	//sig.CheckSend(msg)
+	self.Send = append(self.Send,msg)
+
+	//msg.GetTime()
+	func(){
+		if len(self.InsCache.Price.Time) == 0 {
+			return
+		}
+		ti := strings.Split(string(self.InsCache.Price.Time),".")
+		sec,err := strconv.Atoi(ti[0])
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		if msg.GetTime() < int64(sec) {
+			return
+		}
+		for _,b := range self.InsCache.Price.Bids {
+			if !msg.can.CheckSection(b.Price.GetPrice()) {
+				return
+			}
+		}
+		for _,b := range self.InsCache.Price.Asks {
+			if !msg.can.CheckSection(b.Price.GetPrice()) {
+				return
+			}
+		}
+		units :=config.Conf.Units
+		if msg.tp<0 {
+			units = -units
+		}
+		mr,err := request.HandleOrder(self.InsCache.Ins.Name,units,0,msg.tp*2,msg.sl)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		msg.mr = &mr
+
+		log.Println(mr)
+		//if msg.tp>0 {
+		//	self.InsCache.Price.CloseoutBid
+		//}else{
+		//	self.InsCache.Price.CloseoutAsk
+		//}
+	}()
+
+	return true
+
+}
+
+func (self *Signal) readSend( f func(*Msg) bool){
+	NewSend := make([]*Msg,len(self.Send))
+	j:=0
+	for _,mg := range self.Send {
+		if !f(mg){
+			NewSend[j] = mg
+			j++
+		}
+	}
+	self.Send = NewSend[:j]
+}
+func (self *Signal) CheckSend(mg *Msg) {
+
+	le := len(self.Send)
+	if le == 0 {
+		return
+	}
+	le--
+	lastMsg :=self.Send[le]
+	tp :=lastMsg.tp>0
+	if tp != (mg.tp>0) {
+		diff := (self.InsCache.GetBaseCan().GetMidAverage() - lastMsg.can.GetMidAverage())
+		if tp != (diff>0) {
+			lastMsg.Close(diff)
+			self.Send = self.Send[:le]
+			self.CheckSend(mg)
+		}
+		mg.isSend = false
+	}
+
+	//return
+	//if len(self.Send) >0 && (self.Send[0].tp>0) != (mg.tp>0) {
+	//	self.Send[0].Close(self.InsCache)
+	//	self.Send = self.Send[1:]
+	//	self.CheckSend(mg)
+	//}
+
 }
 
 type Ana struct{
@@ -159,26 +289,13 @@ func (self *Ana) add(msg *Msg,Ins *replay.InstrumentCache){
 		self.msgMap[key] = &Signal{
 			Msg:msg,
 			InsCache:Ins,
-			Send:make(chan *Msg,100)}
+			Send:make([]*Msg,0,100)}
 		self.Unlock()
 		return
 	}
-	sig.Msg.check(msg)
-	sig.Msg = msg
-	if msg.joint.Last != nil &&
-	msg.joint.Last.Last != nil &&
-	(math.Abs(msg.joint.Last.Last.Diff)/math.Abs(msg.joint.Diff)) > 3 {
-		var num int = 0
-		msg.checkSignal(&num)
-		if num >0 {
-			select{
-			case sig.Send <-msg:
-				msg.isSend = true
-			default:
-			}
-		}
+	if sig.CheckMsg(msg) {
+		msg.Send(sig.InsCache.Ins.Name)
 	}
-	//self.msgMap[key] = signalmsg
 
 }
 func (self *Ana) Check(InsCache *replay.InstrumentCache){
@@ -214,14 +331,14 @@ func (self *Ana) Check(InsCache *replay.InstrumentCache){
 	}
 
 	sig := self.msgMap[InsCache.Ins.Name]
+
 	s := func(Cache *replay.Cache) {
 		if sig == nil {
 			return
 		}
-		sig.readSend(func(mg *Msg,pip float64) bool{
-			//fmt.Println(pip)
-			if mg.scale == Cache.Scale &&
-			mg.test(pip) {
+		sig.readSend(func(mg *Msg) bool{
+			if (mg.scale == Cache.Scale) &&
+			mg.test(Cache) {
 				return true
 			}else{
 				return false

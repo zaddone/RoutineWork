@@ -1,4 +1,5 @@
 /*_*/
 *.log
+/config/
 run.go
 test.go

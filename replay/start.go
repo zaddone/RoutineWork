@@ -2,14 +2,14 @@ package replay
 
 import (
 	"log"
-	"flag"
+//	"flag"
 	"strings"
-	//"github.com/zaddone/RoutineWork/request"
+	"github.com/zaddone/RoutineWork/config"
 )
 
 var (
 	InsCaches []*InstrumentCache
-	InsName   = flag.String("n", "EUR_JPY", "INS NAME")
+	//InsName   = flag.String("n", "EUR_USD", "INS NAME")
 	SignalGroup []Signal = nil
 	SignalBox [6]float64
 )
@@ -24,8 +24,8 @@ type Signal interface{
 
 func init() {
 	log.Println("start replay")
-	flag.Parse()
-	nas := strings.Split(*InsName, "|")
+	//flag.Parse()
+	nas := strings.Split(config.Conf.InsName, "|")
 	InsCaches = make([]*InstrumentCache, len(nas))
 	var InsC *InstrumentCache
 	for i, na := range nas {

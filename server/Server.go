@@ -4,8 +4,9 @@ import (
 	pb "github.com/zaddone/RoutineWork/console"
 	"github.com/zaddone/RoutineWork/replay"
 	"github.com/zaddone/RoutineWork/request"
+	"github.com/zaddone/RoutineWork/config"
 	"context"
-	"flag"
+	//"flag"
 	"time"
 	//"fmt"
 	//"golang.org/x/net/context"
@@ -17,7 +18,7 @@ import (
 )
 
 var (
-	port = flag.String("port", ":50051", "Input Port")
+	//port = flag.String("p", ":50051", "Input Port")
 )
 
 type server struct{}
@@ -89,8 +90,11 @@ func (s *server) ListInstrument(re *pb.Request, stream pb.Greeter_ListInstrument
 }
 
 func init() {
-	flag.Parse()
-	lis, err := net.Listen("tcp", *port)
+	//flag.Parse()
+	if !config.Conf.Server {
+		return
+	}
+	lis, err := net.Listen("tcp", config.Conf.Port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -102,5 +106,5 @@ func init() {
 			log.Fatalf("failed to server: %v", err)
 		}
 	}()
-	//fmt.Println("server run")
+	log.Println("server run",config.Conf.Port)
 }

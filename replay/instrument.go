@@ -4,9 +4,10 @@ import (
 	"github.com/zaddone/RoutineWork/request"
 	"context"
 	//"flag"
-	//"log"
+	"log"
 	"path/filepath"
 	"sync"
+	"encoding/json"
 	//"time"
 	//"strings"
 	//"fmt"
@@ -25,6 +26,7 @@ type ServerChan struct {
 }
 
 func (self *ServerChan) Out(f func(tc *TimeCache) error) (err error) {
+
 	for {
 		t := <-self.TimeChan
 		err = f(t)
@@ -34,6 +36,7 @@ func (self *ServerChan) Out(f func(tc *TimeCache) error) (err error) {
 
 	}
 	return err
+
 }
 
 func (self *ServerChan) In(f *TimeCache) {
@@ -94,6 +97,7 @@ type InstrumentCache struct {
 	ServerChanMap  ServerChanMap
 	w		sync.WaitGroup
 	Ins		*request.Instrument
+	Price		request.Price
 	//SplitCache     chan *Cache
 	//signal Signal
 }
@@ -108,6 +112,9 @@ func NewInstrumentCache(Instr string) *InstrumentCache {
 	inc.Init(Ins)
 	//inc.signal = SignalSys
 	return &inc
+}
+func (self *InstrumentCache) GetBaseCan() *request.Candles {
+	return self.CacheList[0].LastCan
 }
 func (self *InstrumentCache) Signal(){
 
@@ -179,11 +186,27 @@ func (self *InstrumentCache) Init(Ins *request.Instrument) {
 	for _, ca := range self.CacheList[:le] {
 		ca.LastCache = lastCache
 	}
+
+	go self.syncGetPrice()
 	//self.SplitCache = make(chan *Cache,len(self.CacheList))
 	//self.SplitCache = make(chan *Cache,le)
 
 }
+func (self *InstrumentCache) syncGetPrice(){
+
+	var err error
+	for{
+		err = request.GetPricingStream([]string{self.Ins.Name},func(da []byte){
+			err = json.Unmarshal(da,&self.Price)
+			if err != nil {
+				log.Println(err)
+			}
+		})
+	}
+
+}
 func (self *InstrumentCache) sortCacheList(i int) {
+
 	if i == 0 {
 		return
 	}
