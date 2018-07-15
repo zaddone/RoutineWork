@@ -37,12 +37,25 @@ type Price struct {
 	Time DateTime `json:"time"`
 	Status string `json:"status"`
 	Tradeable bool `json:"tradeable"`
-	Bids []PriceBucket `json:"bids"`
-	Asks []PriceBucket `json:"asks"`
+	Bids []*PriceBucket `json:"bids"`
+	Asks []*PriceBucket `json:"asks"`
 	CloseoutBid PriceValue `json:"closeoutBid"`
 	CloseoutAsk PriceValue `json:"closeoutAsk"`
 	QuoteHomeConversionFactors QuoteHomeConversionFactors `json:"quoteHomeConversionFactors"`
 	UnitsAvailable UnitsAvailable `json:"unitsAvailable"`
+}
+func (self *Price) GetPrice() (pr float64) {
+
+	for _,b := range self.Bids {
+		pr+=b.Price.GetPrice()
+	}
+	for _,b := range self.Asks {
+		pr+=b.Price.GetPrice()
+	}
+	pr+=self.CloseoutAsk.GetPrice()
+	pr+=self.CloseoutBid.GetPrice()
+	return pr/float64(len(self.Bids)+len(self.Asks)+2)
+
 }
 type PricesResponses struct {
 	Prices []*Price `json:"prices"`

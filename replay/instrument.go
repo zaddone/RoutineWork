@@ -2,12 +2,14 @@ package replay
 
 import (
 	"github.com/zaddone/RoutineWork/request"
+	"github.com/zaddone/RoutineWork/config"
 	"context"
 	//"flag"
 	"log"
 	"path/filepath"
 	"sync"
 	"encoding/json"
+	"fmt"
 	//"time"
 	//"strings"
 	//"fmt"
@@ -76,11 +78,13 @@ func (self *ServerChanMap) Del(k int){
 	self.Unlock()
 }
 func (self *ServerChanMap) Send(tc *TimeCache){
+
 	self.Lock()
 	for _,ser := range self.ServerChans {
 		ser.In(tc)
 	}
 	self.Unlock()
+
 }
 func (self *ServerChanMap) Add(k int,Sc *ServerChan){
 
@@ -113,8 +117,13 @@ func NewInstrumentCache(Instr string) *InstrumentCache {
 	//inc.signal = SignalSys
 	return &inc
 }
+
+func (self *InstrumentCache) GetBaseCache() *Cache {
+	return self.CacheList[0]
+}
+
 func (self *InstrumentCache) GetBaseCan() *request.Candles {
-	return self.CacheList[0].LastCan
+	return self.GetBaseCache().LastCan
 }
 func (self *InstrumentCache) Signal(){
 
@@ -132,6 +141,27 @@ func (self *InstrumentCache) Monitor(ca *Cache,can *request.Candles) {
 		Scale: ca.Scale,
 		Time:  can.Time,
 		Name:  ca.Name})
+
+}
+
+func (self *InstrumentCache) Selective(f bool,begin int) (end int) {
+
+	end = begin+1
+	if end == len(self.CacheList) {
+		return begin
+	}
+
+	Cache := self.CacheList[end]
+	if (Cache.EndJoint.MaxDiff != 0) {
+		if (f == (Cache.EndJoint.Diff>0)) {
+			return begin
+		}
+	}else{
+		if (f != (Cache.EndJoint.Diff>0)) {
+			return begin
+		}
+	}
+	return self.Selective(f,end)
 
 }
 
@@ -187,9 +217,9 @@ func (self *InstrumentCache) Init(Ins *request.Instrument) {
 		ca.LastCache = lastCache
 	}
 
-	go self.syncGetPrice()
-	//self.SplitCache = make(chan *Cache,len(self.CacheList))
-	//self.SplitCache = make(chan *Cache,le)
+	if config.Conf.Price {
+		go self.syncGetPrice()
+	}
 
 }
 func (self *InstrumentCache) syncGetPrice(){
@@ -197,10 +227,14 @@ func (self *InstrumentCache) syncGetPrice(){
 	var err error
 	for{
 		err = request.GetPricingStream([]string{self.Ins.Name},func(da []byte){
+			if len(da) == 0 {
+				return
+			}
 			err = json.Unmarshal(da,&self.Price)
 			if err != nil {
-				log.Println(err)
+				log.Println(string(da),err)
 			}
+			fmt.Printf("%s\r",self.Price.Time)
 		})
 	}
 

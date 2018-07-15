@@ -157,7 +157,6 @@ func SetActiveAccount() {
 		SetActiveAccount()
 	}
 
-
 }
 
 func InitAccounts(update bool) (err error) {
@@ -377,6 +376,13 @@ func (self *Instrument) PipDiff() float64 {
 		return self.pipDiff
 	}
 }
+func (self *Instrument) StandardPrice(pr float64) string {
+
+	_int,frac:= math.Modf(pr)
+	frac  = math.Pow10(int(self.DisplayPrecision)) * frac
+	return fmt.Sprintf("%d.%d", int(_int),int(frac))
+
+}
 
 func (self *Instrument) Init(tmp map[string]interface{}) (err error) {
 	self.Name = tmp["name"].(string)
@@ -482,6 +488,7 @@ func (self *Candles) String() string {
 	return fmt.Sprintf("%.5f %.5f %.5f %.5f %d %.5f\r\n", self.Mid[0], self.Mid[1], self.Mid[2], self.Mid[3], self.Time, self.Volume)
 }
 func (self *Candles) CheckSection( val float64 ) bool {
+	fmt.Println(self.Mid[2] , val , self.Mid[3])
 	if val > self.Mid[2] || val < self.Mid[3] {
 		return false
 	}

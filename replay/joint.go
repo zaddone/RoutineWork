@@ -3,6 +3,7 @@ package replay
 import (
 	"github.com/zaddone/RoutineWork/request"
 	"math"
+//	"fmt"
 )
 
 type Joint struct {
@@ -169,13 +170,15 @@ func (self *Joint) Append(can *request.Candles) (jo *Joint, update bool) {
 	}
 
 	ave := self.GetLongAve()
+
 	var dif float64 = 0
 	var maxId int = 0
 	for i := 1; i < le; i++ {
 		dif = canVal - self.Cans[i].GetMidAverage()
 		if (dif > 0) != (self.Diff > 0) {
 			dif = math.Abs(dif)
-			if (dif > ave) && (dif > self.MaxDiff) {
+			//if (dif > ave) && (dif > self.MaxDiff) {
+			if (dif > self.MaxDiff) {
 				self.MaxDiff = dif
 				maxId = i
 			}
@@ -185,8 +188,14 @@ func (self *Joint) Append(can *request.Candles) (jo *Joint, update bool) {
 		return
 	}
 	if ave > self.MaxDiff {
+		//if self.MaxDiff >0 {
+		//	fmt.Println(self.MaxDiff)
+		//}
 		return
 	}
+//	if ave==0{
+//	fmt.Println(self.MaxDiff,ave)
+//	}
 	jo = self.split(maxId)
 	update = true
 	return
@@ -194,5 +203,10 @@ func (self *Joint) Append(can *request.Candles) (jo *Joint, update bool) {
 }
 
 func (self *Joint) GetLongAve() float64 {
+	if self.SumLong == 0 {
+		for _,can := range self.Cans {
+			self.SumLong += can.GetMidLong()
+		}
+	}
 	return self.SumLong / float64(len(self.Cans))
 }

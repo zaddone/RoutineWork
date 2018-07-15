@@ -5,6 +5,7 @@ import (
 //	"flag"
 	"strings"
 	"github.com/zaddone/RoutineWork/config"
+	//"github.com/zaddone/RoutineWork/request"
 )
 
 var (
@@ -13,14 +14,15 @@ var (
 	SignalGroup []Signal = nil
 	SignalBox [6]float64
 )
-//type SignalData struct {
-//	InsCache *InstrumentCache
-//	Ca  *Cache
-//}
+
 type Signal interface{
 	Check(sd *InstrumentCache)
 	Show()
 }
+//type JointLib interface {
+//	New()
+//	Update(*request.Candles) bool
+//}
 
 func init() {
 	log.Println("start replay")

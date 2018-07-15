@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	//	"math"
+	//"math"
 )
 
 type PriceValue string
@@ -22,12 +22,13 @@ type TransactionID string
 
 type PriceBucket struct {
 	Price     PriceValue `json:"price"`
-	Liquidity int     `json:"liquidity"`
+	Liquidity interface{} `json:"liquidity"`
 }
 func (self PriceValue) GetPrice() float64 {
 	v,err := strconv.ParseFloat(string(self),64)
 	if err != nil {
-		log.Println(err)
+		log.Fatalln(err)
+		return 0
 	}
 	return v
 }
@@ -84,6 +85,7 @@ type OrderFillT struct {
 	TradeReduced   TradeReduce     `json:"tradeReduced"`
 }
 type OrderResponse struct {
+
 	OrderRejectTransaction Transaction     `json:"orderRejectTransaction"`
 	RelatedTransactionIDs  []TransactionID `json:"relatedTransactionIDs"`
 
@@ -95,6 +97,7 @@ type OrderResponse struct {
 	LastTransactionID TransactionID `json:"lastTransactionID"`
 	ErrorCode         string        `json:"errorCode"`
 	ErrorMessage      string        `json:"errorMessage"`
+
 }
 
 type ClientExt struct {
@@ -145,28 +148,25 @@ func (self *MarketOrderRequest) Init(InsName string) {
 	self.PositionFill = "DEFAULT"
 	self.PriceBount = "2"
 }
-func (self *MarketOrderRequest) SetStopLossDetails(price float64) {
-	self.StopLossOnFill = new(Details)
-	self.StopLossOnFill.Price = fmt.Sprintf("%f", price)
+func (self *MarketOrderRequest) SetStopLossDetails(price string) {
+	self.StopLossOnFill = &Details{
+		Price : price	}
 }
-func (self *MarketOrderRequest) SetTakeProfitDetails(price float64) {
-	self.TakeProfitOnFill = new(Details)
-	self.TakeProfitOnFill.Price = fmt.Sprintf("%f", price)
+func (self *MarketOrderRequest) SetTakeProfitDetails(price string) {
+	self.TakeProfitOnFill = &Details{
+		Price : price	}
 }
 
-func (self *MarketOrderRequest) SetTrailingStopLossDetails(dif float64) {
-
-	self.TrailingStopLossOnFill = new(TrailingStopLossDetails)
-	self.TrailingStopLossOnFill.Distance = fmt.Sprintf("%f", dif)
-	//self.TrailingStopLossOnFill.Distance = fmt.Sprintf("%f",Instr.MinimumTrailingStopDistance)
-
+func (self *MarketOrderRequest) SetTrailingStopLossDetails(dif string) {
+	self.TrailingStopLossOnFill = & TrailingStopLossDetails{
+		Distance : dif	}
 }
 
 func (self *MarketOrderRequest) SetUnits(units int) {
 	self.Units = fmt.Sprintf("%d", units)
 }
 
-func HandleOrder(InsName string,unit int, dif float64, Tp, Sl float64) (mr OrderResponse, err error) {
+func HandleOrder(InsName string,unit int, dif , Tp, Sl string) (mr OrderResponse, err error) {
 
 	path := ActiveAccount.GetAccountPath()
 	path += "/orders"
@@ -174,14 +174,14 @@ func HandleOrder(InsName string,unit int, dif float64, Tp, Sl float64) (mr Order
 	order := NewMarketOrderRequest(InsName)
 	//order.Init()
 	order.SetUnits(unit)
-	if dif != 0 {
+	if dif != "" {
 		order.SetTrailingStopLossDetails(dif)
 	}
-	if Sl != 0 {
+	if Sl != "" {
 		order.SetStopLossDetails(Sl)
 	}
 
-	if Tp != 0 {
+	if Tp != "" {
 		order.SetTakeProfitDetails(Tp)
 	}
 	//Val["order"] = order

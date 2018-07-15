@@ -58,6 +58,8 @@ func (self *CacheFile) Init(name, path string, fi os.FileInfo, Max int) (err err
 
 }
 
+
+
 type Cache struct {
 	Scale       int64
 	Name        string
@@ -68,15 +70,27 @@ type Cache struct {
 	//TmpCan      []*request.Candles
 	DiffLong  float64
 	LastCan   *request.Candles
+
 	EndJoint  *Joint
 	BeginJoint *Joint
+
+	//JointLib  JointLib
 	//Id        int
 	LastCache *Cache
 	par       *InstrumentCache
 	IsSplit bool
 	//IsUpdate bool
 }
-func (self *Cache)GetInsName() string {
+func (self *Cache) GetInsCache() *InstrumentCache {
+	return self.par
+}
+func (self *Cache) GetMinCache() *Cache {
+	return self.par.GetBaseCache()
+}
+func (self *Cache) GetMinCan() *request.Candles {
+	return self.par.GetBaseCan()
+}
+func (self *Cache) GetInsName() string {
 	return self.par.Ins.Name
 }
 
@@ -91,6 +105,7 @@ func NewCache(name string, scale int64, p *InstrumentCache) (ca *Cache) {
 		EndtimeChan: make(chan int64, 1),
 		par:         p}
 	ca.BeginJoint = ca.EndJoint
+	//ca.JointLib.New()
 	return ca
 
 }
@@ -141,6 +156,9 @@ func (self *Cache) Load(name, path string) {
 
 func (self *Cache) CheckUpdate(can *request.Candles) bool {
 
+	if can.GetMidLong() == 0 {
+		return false
+	}
 	if self.LastCan != nil {
 		if self.LastCan.Time >= can.Time {
 			return false
@@ -170,9 +188,11 @@ func (self *Cache) Sensor(cas []*Cache) {
 		self.par.w.Wait()
 
 		day:= time.Unix(endTime, 0)
-		d := day.Format("2006-01-02")
+		//d := day.Format("2006-01-02")
+		d := day.Format("2006-01")
 		if d != date {
-			fmt.Printf("%s %.2f---------------------\r\n",date,SignalBox)
+			SignalBox[3] = SignalBox[1]/SignalBox[0]
+			fmt.Printf("%s %.5f---------------------\r\n",date,SignalBox)
 			date = d
 			SignalBox=[6]float64{0,0,0,0,0,0}
 		}
@@ -191,7 +211,7 @@ func (self *Cache) Sensor(cas []*Cache) {
 		//	}
 		//	fmt.Printf("%s %.2f %s %d %d\r", day , SignalBox[:3],self.par.Price.Bids,int64(sec),int64(nsec))
 		//}else{
-		fmt.Printf("%s %.2f\r", day , SignalBox)
+		//fmt.Printf("%s %.2f\r", day , SignalBox)
 		//}
 		self.par.Signal()
 		//if cas[0].LastCache != nil {
@@ -225,6 +245,8 @@ func (self *Cache) UpdateJoint(can *request.Candles) ( bool) {
 		return false
 	}
 	self.par.Monitor(self,can)
+	//self.JointLib.Update(can)
+
 	self.EndJoint, self.IsSplit = self.EndJoint.Append(can)
 	//fmt.Println(len(self.par.SplitCache))
 	if self.IsSplit {
