@@ -1,41 +1,124 @@
 package signal
 
 import (
-	"github.com/zaddone/RoutineWork/replay"
+	//"github.com/zaddone/RoutineWork/replay"
 	"github.com/zaddone/RoutineWork/request"
 	"github.com/zaddone/RoutineWork/config"
 	"fmt"
 	"math"
 	"log"
-	"strconv"
+	//"strconv"
 	"time"
-	"strings"
+	//"strings"
 )
 
 type Signal struct {
-	Msg *Msg
-	InsCache *replay.InstrumentCache
+
+	//Msg *Msg
+	InsCache config.Instrument
+	Joint *JointMap
+	MsgBox [2]float64
+	//MsgBox1 []float64
+	//Split chan int
+	CacheLen int
+	snap  int64
+
+	LastTime time.Time
+
 }
 
-func (self *Signal) Add(msg *Msg) {
+func NewSignal(Ins config.Instrument) (s *Signal) {
 
-	if self.Msg == nil {
-		self.Msg = msg
+	s = &Signal{
+		Joint:NewJointMap(),
+		InsCache:Ins}
+
+	if Ins != nil {
+		s.CacheLen=Ins.GetCacheLen()
+	}
+	return s
+
+}
+
+func (self *Signal) GetMergeRa(){
+
+	var mer [2]float64
+	self.ReadJoint(func(jc *JointCache,i int){
+		if jc == nil {
+			return
+		}
+		mer[0] += jc.Merge[0]
+		mer[1] += jc.Merge[1]
+	})
+	fmt.Printf("%.0f %.3f\r\n",mer,mer[0]/mer[1])
+
+}
+
+func (self *Signal) GetSnap() (snap int64) {
+
+	self.ReadJoint(func(jo *JointCache,i int){
+		snap = snap<<1
+		if jo== nil {
+			return
+		}
+		if jo.IsSplit {
+			snap++
+		}
+	})
+	return snap
+
+}
+
+func (self *Signal) CheckSnap() (ids []int) {
+
+	snap := self.GetSnap()
+	if self.snap == snap {
 		return
 	}
-	self.Msg = self.Msg.merge(msg)
-	//	return
-	//}
-	//if !self.Msg.post{
-	//	msg.last = self.Msg.last
-	//	self.Msg = msg
-	//	return
-	//}
-	//msg.last = self.Msg
-	//self.Msg = msg
+	xor := self.snap^snap
+	self.snap = snap
+	//fmt.Printf("%b %b %b\r\n",snap,self.snap,xor)
+	for i:=self.CacheLen-1; i>=0; i-- {
+		if (xor|1 == xor) && (snap|1 == snap) {
+			ids = append(ids,i)
+		}
+		xor = xor>>1
+		snap= snap>>1
+	}
 	return
 
 }
+
+func (self *Signal) ReadJoint(f func(*JointCache,int)) {
+	self.InsCache.GetCacheList(func(i int,c config.Cache) {
+		f(self.Joint.Get(c.GetScale()),i)
+	})
+}
+func (self *Signal) ShowMsg() string {
+	return fmt.Sprintf("%.0f %.3f",self.MsgBox,self.MsgBox[0]/self.MsgBox[1])
+}
+
+func (self *Signal) UpdateJoint( ca config.Cache ) {
+
+	Time := time.Unix(ca.GetlastCan().GetTime(),0)
+	if self.LastTime.Unix() < Time.Unix() {
+		if Time.Month() != self.LastTime.Month() {
+			fmt.Println(self.LastTime,self.ShowMsg())
+			self.MsgBox = [2]float64{0,0}
+		}
+		self.LastTime = Time
+		fmt.Printf("%s %s\r",self.LastTime,self.ShowMsg())
+	}
+	k := ca.GetScale()
+	j := self.Joint.Get(k)
+	if j == nil {
+		j = NewJointCache(self)
+		self.Joint.Set(k,j)
+	}
+	j.Add(ca)
+
+}
+
 func (self *Signal) PostOrder(msg *Msg) {
 	if msg.post {
 		return
@@ -47,7 +130,7 @@ func (self *Signal) PostOrder(msg *Msg) {
 	//Min:=self.InsCache.Ins.MinimumTrailingStopDistance*1.5
 	//Max:=self.InsCache.Ins.MinimumTrailingStopDistance*2
 	//sl := math.Abs(msg.sl)
-	if ( math.Abs(msg.sl) < self.InsCache.Ins.MinimumTrailingStopDistance*1.5 ) {
+	if (math.Abs(msg.sl)<self.InsCache.GetInsStopDis()*1.5){
 		return
 	}
 	//fmt.Println(time.Unix(msg.can.Time,0),msg.endCache.Scale,msg.sl)
@@ -55,7 +138,7 @@ func (self *Signal) PostOrder(msg *Msg) {
 	//msg.Show(0)
 	if msg.last != nil {
 		msg.last = msg.last.readAll( func(m *Msg) bool {
-			m.Close(self.InsCache.GetBaseCan().GetMidAverage())
+			m.Close(self.InsCache.GetBaseCache().GetlastCan().GetMidAverage())
 			return true
 		})
 		//fmt.Println("last",msg.last)
@@ -63,17 +146,13 @@ func (self *Signal) PostOrder(msg *Msg) {
 		//msg.last = nil
 	}
 
-	if len(self.InsCache.Price.Time) == 0 {
+	sec := self.InsCache.GetPriceTime()
+	if sec == 0 {
 		return
 	}
-	ti := strings.Split(string(self.InsCache.Price.Time),".")
-	sec,err := strconv.Atoi(ti[0])
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	if msg.GetTime() < int64(sec) {
-		fmt.Println(time.Unix(msg.GetTime(),0).Format("2006-01-02T15:04:05"),time.Unix(int64(sec),0).Format("2006-01-02T15:04:05"))
+
+	if msg.GetTime() < sec {
+		fmt.Println(time.Unix(msg.GetTime(),0).Format("2006-01-02T15:04:05"),time.Unix(sec,0).Format("2006-01-02T15:04:05"))
 		return
 	}
 
@@ -91,12 +170,12 @@ func (self *Signal) PostOrder(msg *Msg) {
 		units = -units
 	}
 
-	sl:=self.InsCache.Ins.StandardPrice(beginpr + msg.sl)
-	tp:=self.InsCache.Ins.StandardPrice(beginpr + msg.tp)
+	sl:=self.InsCache.GetStandardPrice(beginpr + msg.sl)
+	tp:=self.InsCache.GetStandardPrice(beginpr + msg.tp)
 	fmt.Println(sl,tp)
 
 	mr,err := request.HandleOrder(
-		self.InsCache.Ins.Name,
+		self.InsCache.GetInsName(),
 		units,"",tp,sl)
 	if err != nil {
 		log.Println(err)

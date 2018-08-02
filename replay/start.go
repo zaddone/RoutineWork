@@ -2,7 +2,6 @@ package replay
 
 import (
 	"log"
-//	"flag"
 	"strings"
 	"github.com/zaddone/RoutineWork/config"
 	//"github.com/zaddone/RoutineWork/request"
@@ -10,14 +9,29 @@ import (
 
 var (
 	InsCaches []*InstrumentCache
-	//InsName   = flag.String("n", "EUR_USD", "INS NAME")
 	SignalGroup []Signal = nil
-	SignalBox [6]float64
+	//SignalBox [6]float64
+	//JointLibs []JointLib = nil
 )
 
 type Signal interface{
-	Check(sd *InstrumentCache)
+	//New()
+	Update(config.Cache)
+	Check(config.Instrument)
 	Show()
+
+}
+
+func runSignal( f func(Signal)){
+
+	if SignalGroup == nil  {
+		return
+	}
+	for _,_s := range SignalGroup {
+		f(_s)
+		//si.Check(self)
+	}
+
 }
 //type JointLib interface {
 //	New()

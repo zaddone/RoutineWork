@@ -228,7 +228,7 @@ func Down(name string, from, to int64, gr int64, gran string, Handle func(*Candl
 		err = GetCandlesHandle(name, gran, from, 500, func(c interface{}) error {
 			can := new(Candles)
 			can.Init(c.(map[string]interface{}))
-			Begin = can.GetTime()
+			Begin = can.GetTimer()
 			Handle(can)
 			path := filepath.Join(name, gran, fmt.Sprintf("%d", Begin.Year()))
 			_, err := os.Stat(path)
@@ -445,7 +445,10 @@ func (self *Candles) GetInOut() bool {
 	return self.Mid[0] < self.Mid[1]
 }
 
-func (self *Candles) GetTime() time.Time {
+func (self *Candles) GetTime() int64 {
+	return self.Time
+}
+func (self *Candles) GetTimer() time.Time {
 	return time.Unix(self.Time, 0).UTC()
 
 }

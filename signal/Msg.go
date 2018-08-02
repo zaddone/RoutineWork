@@ -1,6 +1,6 @@
 package signal
 import(
-	"github.com/zaddone/RoutineWork/replay"
+	//"github.com/zaddone/RoutineWork/replay"
 	"github.com/zaddone/RoutineWork/request"
 	"github.com/zaddone/RoutineWork/config"
 	"math"
@@ -9,10 +9,10 @@ import(
 )
 type Msg struct {
 
-	joint *replay.Joint
-	can *request.Candles
-	endJoint *replay.Joint
-	endCache *replay.Cache
+	joint *Joint
+	can config.Candles
+	endJoint *Joint
+	endCache config.Cache
 	tp float64
 	sl float64
 	//scale int64
@@ -20,8 +20,11 @@ type Msg struct {
 	mr *request.OrderResponse
 	post bool
 	Num int
+	par  *Signal
 
 }
+//func NewMsg(s *Signal) *Msg {
+//}
 
 func (self *Msg) readAll(f func(m *Msg) bool) *Msg {
 
@@ -120,7 +123,7 @@ func (self *Msg) Count() (n int) {
 }
 
 func (self *Msg) Show(i int){
-	fmt.Println(i,self.endCache.Scale,self.joint.Diff)
+	fmt.Println(i,self.endCache.GetScale(),self.joint.Diff)
 	if self.last != nil {
 		self.last.Show(i+1)
 	}
@@ -132,22 +135,23 @@ func (self *Msg) SendClose() {
 	}
 
 	log.Println("close position")
-	v,err := request.ClosePosition(self.endCache.GetInsName(),fmt.Sprintf("%d",config.Conf.Units))
+	v,err := request.ClosePosition(self.endCache.GetName(),fmt.Sprintf("%d",config.Conf.Units))
 	if err != nil {
 		log.Println("close",err)
 	}else{
-		if v>0 {
-			replay.SignalBox[4]++
-		}else{
-			replay.SignalBox[5]++
-		}
-		replay.SignalBox[3]+=v
-		fmt.Println(replay.SignalBox[3:])
+		fmt.Println(v)
+		//if v>0 {
+		//	self.par.MsgBox[4]++
+		//}else{
+		//	self.par.MsgBox[5]++
+		//}
+		//self.par.MsgBox[3] += v
+		//fmt.Println(self.par.MsgBox[3:])
 	}
 }
 
 func (self *Msg) GetTime() int64 {
-	return self.can.Time + 5+ 5
+	return self.can.GetTime() + 5+ 5
 }
 
 func (self *Msg) Close(val float64) {
@@ -156,14 +160,14 @@ func (self *Msg) Close(val float64) {
 	if !self.post {
 		return
 	}
-	diff := val - self.can.GetMidAverage()
-	if (diff>0) == (self.tp>0) {
-		replay.SignalBox[0]++
-		replay.SignalBox[2] += math.Abs(diff)
-	}else{
-		replay.SignalBox[1]++
-		replay.SignalBox[2]-= math.Abs(diff)
-	}
+	//diff := val - self.can.GetMidAverage()
+	//if (diff>0) == (self.tp>0) {
+	//	replay.SignalBox[0]++
+	//	replay.SignalBox[2] += math.Abs(diff)
+	//}else{
+	//	replay.SignalBox[1]++
+	//	replay.SignalBox[2]-= math.Abs(diff)
+	//}
 	self.SendClose()
 
 }
@@ -187,21 +191,21 @@ func (self *Msg) Close(val float64) {
 //
 //}
 
-func (self *Msg) testOut(Cache *replay.Cache) bool {
+func (self *Msg) testOut(Cache config.Cache) bool {
 
-	diff := Cache.LastCan.GetMidAverage() - self.can.GetMidAverage()
+	diff := Cache.GetlastCan().GetMidAverage() - self.can.GetMidAverage()
 	if (math.Abs(diff)<math.Abs(self.sl)) {
 		return false
 	}
 	if ( (diff>0) == (self.sl>0) ) {
 		if self.post {
-			replay.SignalBox[1]++
-			replay.SignalBox[2]-= math.Abs(diff)
+			//replay.SignalBox[1]++
+			//replay.SignalBox[2]-= math.Abs(diff)
 		}
 	}else{
 		if self.post {
-			replay.SignalBox[0]++
-			replay.SignalBox[2]+= math.Abs(diff)
+			//replay.SignalBox[0]++
+			//replay.SignalBox[2]+= math.Abs(diff)
 		}
 	}
 	return true
